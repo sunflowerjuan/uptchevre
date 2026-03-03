@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 215 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    --primary: 217 91% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 215 25% 20%;
+
+    --muted: 210 30% 95%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 210 50% 90%;
+    --accent-foreground: 217 91% 40%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 30% 88%;
+    --input: 214 30% 88%;
+    --ring: 217 91% 50%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 215 30% 12%;
+    --sidebar-foreground: 210 30% 90%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 30% 18%;
+    --sidebar-accent-foreground: 210 30% 90%;
+    --sidebar-border: 215 25% 20%;
+    --sidebar-ring: 217 91% 60%;
+
+    /* Custom tokens */
+    --canvas-bg: 210 25% 96%;
+    --canvas-grid: 214 30% 88%;
+    --node-bg: 0 0% 100%;
+    --node-border: 217 91% 50%;
+    --node-active: 217 91% 45%;
+    --node-accept: 145 65% 42%;
+    --transition-line: 215 20% 45%;
+    --toolbar-bg: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 215 30% 8%;
+    --foreground: 210 30% 92%;
+    --card: 215 30% 12%;
+    --card-foreground: 210 30% 92%;
+    --popover: 215 30% 12%;
+    --popover-foreground: 210 30% 92%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 25% 18%;
+    --secondary-foreground: 210 30% 90%;
+    --muted: 215 25% 15%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 215 30% 20%;
+    --accent-foreground: 217 91% 65%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 25% 20%;
+    --input: 215 25% 20%;
+    --ring: 217 91% 60%;
+    --sidebar-background: 215 35% 6%;
+    --sidebar-foreground: 210 30% 85%;
+    --sidebar-primary: 217 91% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 35% 12%;
+    --sidebar-accent-foreground: 210 30% 85%;
+    --sidebar-border: 215 30% 14%;
+    --sidebar-ring: 217 91% 55%;
+    --canvas-bg: 215 30% 10%;
+    --canvas-grid: 215 25% 16%;
+    --node-bg: 215 30% 15%;
+    --node-border: 217 91% 55%;
+    --node-active: 217 91% 60%;
+    --node-accept: 145 60% 35%;
+    --transition-line: 215 15% 55%;
+    --toolbar-bg: 215 30% 12%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  code, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer utilities {
+  .canvas-grid {
+    background-image:
+      linear-gradient(hsl(var(--canvas-grid)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--canvas-grid)) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+}
