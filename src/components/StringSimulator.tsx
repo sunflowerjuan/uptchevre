@@ -20,20 +20,36 @@ export function StringSimulator({ data, highlightedStates, onHighlight }: String
   const [history, setHistory] = useState<{ symbol: string; states: string[] }[]>([]);
 
   const initial = data.states.find((s) => s.isInitial);
+  const idToLabel = new Map(data.states.map((s) => [s.id, s.label]));
+  const labelToIds = new Map<string, string[]>();
+  for (const s of data.states) {
+    const list = labelToIds.get(s.label) ?? [];
+    list.push(s.id);
+    labelToIds.set(s.label, list);
+  }
+  const initialLabels = initial
+    ? [...new Set(data.states.filter((s) => s.isInitial).map((s) => s.label))]
+    : [];
 
-  const getNextStates = useCallback(
-    (fromIds: string[], symbol: string): string[] => {
-      const next = new Set<string>();
-      for (const fromId of fromIds) {
-        for (const t of data.transitions) {
-          if (t.from === fromId && t.symbol === symbol) {
-            next.add(t.to);
+  const getNextStateIdsFromLabels = useCallback(
+    (fromLabels: string[], symbol: string): string[] => {
+      const nextIds = new Set<string>();
+      for (const label of fromLabels) {
+        const ids = labelToIds.get(label) ?? [];
+        for (const fromId of ids) {
+          for (const t of data.transitions) {
+            if (t.from === fromId && t.symbol === symbol) nextIds.add(t.to);
           }
         }
       }
-      return Array.from(next);
+      return Array.from(nextIds);
     },
-    [data.transitions]
+    [data.transitions, labelToIds]
+  );
+
+  const idsToLabels = useCallback(
+    (ids: string[]) => [...new Set(ids.map((id) => idToLabel.get(id) ?? id))],
+    [idToLabel]
   );
 
   const reset = useCallback(() => {
@@ -45,55 +61,93 @@ export function StringSimulator({ data, highlightedStates, onHighlight }: String
   }, [onHighlight]);
 
   const runAll = useCallback(() => {
-    if (!initial) return;
+    if (!initial || initialLabels.length === 0) return;
     const symbols = input.split("");
-    let states = [initial.id];
-    const hist: { symbol: string; states: string[] }[] = [{ symbol: "→", states }];
+    let currentIds = (labelToIds.get(initialLabels[0]) ?? []).slice();
+    for (const label of initialLabels.slice(1)) {
+      currentIds = [...currentIds, ...(labelToIds.get(label) ?? [])];
+    }
+    const hist: { symbol: string; states: string[] }[] = [
+      { symbol: "→", states: idsToLabels(currentIds) },
+    ];
 
     for (const sym of symbols) {
-      states = getNextStates(states, sym);
-      hist.push({ symbol: sym, states: [...states] });
-      if (states.length === 0) break;
+      currentIds = getNextStateIdsFromLabels(idsToLabels(currentIds), sym);
+      hist.push({ symbol: sym, states: idsToLabels(currentIds) });
+      if (currentIds.length === 0) break;
     }
 
     setHistory(hist);
     setStep(symbols.length);
-    setCurrentStates(states);
-    onHighlight(new Set(states));
+    setCurrentStates(currentIds);
+    onHighlight(new Set(currentIds));
 
-    const accepted = states.some((id) => data.states.find((s) => s.id === id)?.isAccept);
-    setResult(states.length === 0 ? "rejected" : accepted ? "accepted" : "rejected");
-  }, [input, initial, getNextStates, data.states, onHighlight]);
+    const currentLabels = idsToLabels(currentIds);
+    const accepted = currentLabels.some((label) =>
+      data.states.some((s) => s.label === label && s.isAccept)
+    );
+    setResult(
+      currentIds.length === 0 ? "rejected" : accepted ? "accepted" : "rejected"
+    );
+  }, [
+    input,
+    initial,
+    initialLabels,
+    labelToIds,
+    getNextStateIdsFromLabels,
+    idsToLabels,
+    data.states,
+    onHighlight,
+  ]);
 
   const stepForward = useCallback(() => {
-    if (!initial) return;
+    if (!initial || initialLabels.length === 0) return;
     const symbols = input.split("");
 
     if (step === -1) {
-      // Start
-      const states = [initial.id];
-      setCurrentStates(states);
+      const startIds: string[] = [];
+      for (const label of initialLabels) {
+        startIds.push(...(labelToIds.get(label) ?? []));
+      }
+      setCurrentStates(startIds);
       setStep(0);
       setResult("running");
-      setHistory([{ symbol: "→", states }]);
-      onHighlight(new Set(states));
+      setHistory([{ symbol: "→", states: idsToLabels(startIds) }]);
+      onHighlight(new Set(startIds));
       return;
     }
 
     if (step >= symbols.length) return;
 
     const sym = symbols[step];
-    const next = getNextStates(currentStates, sym);
-    setCurrentStates(next);
+    const currentLabels = idsToLabels(currentStates);
+    const nextIds = getNextStateIdsFromLabels(currentLabels, sym);
+    setCurrentStates(nextIds);
     setStep(step + 1);
-    setHistory((h) => [...h, { symbol: sym, states: [...next] }]);
-    onHighlight(new Set(next));
+    setHistory((h) => [...h, { symbol: sym, states: idsToLabels(nextIds) }]);
+    onHighlight(new Set(nextIds));
 
-    if (next.length === 0 || step + 1 >= symbols.length) {
-      const accepted = next.some((id) => data.states.find((s) => s.id === id)?.isAccept);
-      setResult(next.length === 0 ? "rejected" : accepted ? "accepted" : "rejected");
+    if (nextIds.length === 0 || step + 1 >= symbols.length) {
+      const nextLabels = idsToLabels(nextIds);
+      const accepted = nextLabels.some((label) =>
+        data.states.some((s) => s.label === label && s.isAccept)
+      );
+      setResult(
+        nextIds.length === 0 ? "rejected" : accepted ? "accepted" : "rejected"
+      );
     }
-  }, [initial, input, step, currentStates, getNextStates, data.states, onHighlight]);
+  }, [
+    initial,
+    initialLabels,
+    labelToIds,
+    input,
+    step,
+    currentStates,
+    getNextStateIdsFromLabels,
+    idsToLabels,
+    data.states,
+    onHighlight,
+  ]);
 
   const hasStates = data.states.length > 0;
   const hasAccept = data.states.some((s) => s.isAccept);
@@ -174,9 +228,7 @@ export function StringSimulator({ data, highlightedStates, onHighlight }: String
               <p className="text-[11px] font-medium text-muted-foreground">Traza:</p>
               <div className="flex flex-wrap gap-1">
                 {history.map((h, i) => {
-                  const stateLabels = h.states
-                    .map((id) => data.states.find((s) => s.id === id)?.label ?? id)
-                    .join(", ");
+                  const stateLabels = h.states.join(", ");
                   return (
                     <div
                       key={i}

@@ -5,11 +5,70 @@ interface FormalismPanelProps {
   data: AutomataData;
 }
 
+/** Estados agrupados por nombre (label): dos nodos con el mismo nombre se consideran el mismo estado en el formalismo. */
+function useFormalismByLabel(data: AutomataData) {
+  const { states, transitions } = data;
+  const idToLabel = new Map(states.map((s) => [s.id, s.label]));
+
+  const uniqueLabels = [...new Set(states.map((s) => s.label))].sort();
+
+  const byLabel = new Map<
+    string,
+    { isInitial: boolean; isAccept: boolean; stateIds: string[] }
+  >();
+  for (const s of states) {
+    const cur = byLabel.get(s.label);
+    if (!cur) {
+      byLabel.set(s.label, {
+        isInitial: s.isInitial,
+        isAccept: s.isAccept,
+        stateIds: [s.id],
+      });
+    } else {
+      cur.stateIds.push(s.id);
+      cur.isInitial = cur.isInitial || s.isInitial;
+      cur.isAccept = cur.isAccept || s.isAccept;
+    }
+  }
+
+  const initialStateLabel =
+    uniqueLabels.find((label) => byLabel.get(label)?.isInitial) ?? null;
+  const acceptLabels = uniqueLabels.filter((label) => byLabel.get(label)?.isAccept);
+
+  function getTargetLabels(fromLabel: string, symbol: string): string[] {
+    const meta = byLabel.get(fromLabel);
+    if (!meta) return [];
+    const targetLabels = new Set<string>();
+    for (const fromId of meta.stateIds) {
+      for (const t of transitions) {
+        if (t.from === fromId && t.symbol === symbol) {
+          const toLabel = idToLabel.get(t.to) ?? "?";
+          targetLabels.add(toLabel);
+        }
+      }
+    }
+    return [...targetLabels].sort();
+  }
+
+  return {
+    uniqueLabels,
+    initialStateLabel,
+    acceptLabels,
+    byLabel,
+    getTargetLabels,
+  };
+}
+
 export function FormalismPanel({ data }: FormalismPanelProps) {
   const { states, transitions } = data;
   const alphabet = [...new Set(transitions.map((t) => t.symbol))].sort();
-  const initialState = states.find((s) => s.isInitial);
-  const acceptStates = states.filter((s) => s.isAccept);
+  const {
+    uniqueLabels,
+    initialStateLabel,
+    acceptLabels,
+    byLabel,
+    getTargetLabels,
+  } = useFormalismByLabel(data);
 
   if (states.length === 0) {
     return (
@@ -28,6 +87,10 @@ export function FormalismPanel({ data }: FormalismPanelProps) {
           Definición Formal
         </h3>
 
+        <p className="text-[11px] text-muted-foreground">
+          Estados con el mismo nombre se consideran un único estado.
+        </p>
+
         <div className="rounded-lg border bg-card p-3 space-y-3">
           {/* 5-tuple */}
           <p className="font-mono text-sm text-foreground">
@@ -39,7 +102,7 @@ export function FormalismPanel({ data }: FormalismPanelProps) {
               <span className="font-semibold text-primary">Q</span>
               <span className="text-muted-foreground"> = {"{"}</span>
               <span className="font-mono">
-                {states.map((s) => s.label).join(", ")}
+                {uniqueLabels.join(", ")}
               </span>
               <span className="text-muted-foreground">{"}"}</span>
             </div>
@@ -57,7 +120,7 @@ export function FormalismPanel({ data }: FormalismPanelProps) {
               <span className="font-semibold text-primary">q₀</span>
               <span className="text-muted-foreground"> = </span>
               <span className="font-mono">
-                {initialState?.label ?? "—"}
+                {initialStateLabel ?? "—"}
               </span>
             </div>
 
@@ -65,9 +128,7 @@ export function FormalismPanel({ data }: FormalismPanelProps) {
               <span className="font-semibold text-primary">F</span>
               <span className="text-muted-foreground"> = {"{"}</span>
               <span className="font-mono">
-                {acceptStates.length > 0
-                  ? acceptStates.map((s) => s.label).join(", ")
-                  : "∅"}
+                {acceptLabels.length > 0 ? acceptLabels.join(", ") : "∅"}
               </span>
               <span className="text-muted-foreground">{"}"}</span>
             </div>
@@ -79,7 +140,7 @@ export function FormalismPanel({ data }: FormalismPanelProps) {
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Tabla de Transiciones (δ)
           </h4>
-          {alphabet.length > 0 && states.length > 0 ? (
+          {alphabet.length > 0 && uniqueLabels.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-xs">
                 <thead>
@@ -93,25 +154,26 @@ export function FormalismPanel({ data }: FormalismPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {states.map((state) => (
-                    <tr key={state.id} className="border-b last:border-0">
-                      <td className="px-3 py-2 font-mono font-medium">
-                        {state.isInitial && "→ "}
-                        {state.isAccept && "* "}
-                        {state.label}
-                      </td>
-                      {alphabet.map((sym) => {
-                        const targets = transitions
-                          .filter((t) => t.from === state.id && t.symbol === sym)
-                          .map((t) => states.find((s) => s.id === t.to)?.label ?? "?");
-                        return (
-                          <td key={sym} className="px-3 py-2 text-center font-mono">
-                            {targets.length > 0 ? targets.join(", ") : "—"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                  {uniqueLabels.map((label) => {
+                    const meta = byLabel.get(label)!;
+                    return (
+                      <tr key={label} className="border-b last:border-0">
+                        <td className="px-3 py-2 font-mono font-medium">
+                          {meta.isInitial && "→ "}
+                          {meta.isAccept && "* "}
+                          {label}
+                        </td>
+                        {alphabet.map((sym) => {
+                          const targets = getTargetLabels(label, sym);
+                          return (
+                            <td key={sym} className="px-3 py-2 text-center font-mono">
+                              {targets.length > 0 ? targets.join(", ") : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
