@@ -1,4 +1,5 @@
-import { toBlob, toPng } from "html-to-image";
+import { jsPDF } from "jspdf";
+import { toBlob, toCanvas, toPng } from "html-to-image";
 import type { AutomataWorkspaceDocument } from "@/lib/automata-workspace";
 import { createJkautFile } from "@/lib/automata-workspace";
 import type { AutomataAnalysisResult, AutomataSimulationResult } from "@/lib/automata-api";
@@ -177,6 +178,8 @@ async function getClipboardImageBlob(element: HTMLElement) {
     cacheBust: true,
     pixelRatio: 2,
     backgroundColor: getComputedStyle(document.body).backgroundColor,
+    width: element.scrollWidth,
+    height: element.scrollHeight,
   });
 
   if (!blob) {
@@ -191,6 +194,8 @@ export async function exportElementAsPng(element: HTMLElement, fileName: string)
     cacheBust: true,
     pixelRatio: 2,
     backgroundColor: getComputedStyle(document.body).backgroundColor,
+    width: element.scrollWidth,
+    height: element.scrollHeight,
   });
 
   const link = document.createElement("a");
@@ -210,6 +215,42 @@ export async function copyElementImageToClipboard(element: HTMLElement) {
       [blob.type]: blob,
     }),
   ]);
+}
+
+export async function exportElementAsPdf(element: HTMLElement, fileName: string) {
+  const canvas = await toCanvas(element, {
+    cacheBust: true,
+    pixelRatio: 2,
+    backgroundColor: getComputedStyle(document.body).backgroundColor,
+    width: element.scrollWidth,
+    height: element.scrollHeight,
+  });
+
+  const imageData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF({
+    orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
+    unit: "px",
+    format: "a4",
+  });
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const scaledHeight = (canvas.height * pageWidth) / canvas.width;
+
+  let remainingHeight = scaledHeight;
+  let positionY = 0;
+
+  pdf.addImage(imageData, "PNG", 0, positionY, pageWidth, scaledHeight);
+  remainingHeight -= pageHeight;
+
+  while (remainingHeight > 0) {
+    positionY = remainingHeight - scaledHeight;
+    pdf.addPage();
+    pdf.addImage(imageData, "PNG", 0, positionY, pageWidth, scaledHeight);
+    remainingHeight -= pageHeight;
+  }
+
+  pdf.save(`${getFileBaseName(fileName)}.pdf`);
 }
 
 export function exportFormalismAsMarkdown(
