@@ -1,4 +1,3 @@
-import { areAutomataEquivalent } from "../../backend/src/automata-equivalence.js";
 import type { AutomataData } from "../../backend/src/types.js";
 
 type RequestLike = {
@@ -11,7 +10,7 @@ type ResponseLike = {
   status: (code: number) => { json: (body: unknown) => void };
 };
 
-export default function handler(request: RequestLike, response: ResponseLike) {
+export default async function handler(request: RequestLike, response: ResponseLike) {
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -34,6 +33,7 @@ export default function handler(request: RequestLike, response: ResponseLike) {
     return;
   }
 
+  const { areAutomataEquivalent } = await import("../../backend/src/automata-equivalence.js");
   const result = areAutomataEquivalent(request.body.automatonA, request.body.automatonB);
   response.status(200).json({ ok: true, result });
 }
