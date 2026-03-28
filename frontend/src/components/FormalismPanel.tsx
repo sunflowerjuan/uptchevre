@@ -1,4 +1,5 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { EPSILON_DISPLAY } from "@/lib/automata";
 import type { AutomataAnalysisResult } from "@/lib/automata-api";
 
 interface FormalismPanelProps {
@@ -8,15 +9,27 @@ interface FormalismPanelProps {
   error?: string | null;
 }
 
+const SIGMA = "\u03a3";
+const DELTA = "\u03b4";
+const DELTA_STAR = "\u03b4*";
+const TIMES = "\u00d7";
+const UNION = "\u222a";
+const EMPTY_SET = "\u2205";
+
+function getTupleLabel(type: AutomataAnalysisResult["automatonType"]) {
+  if (type === "NFA_EPSILON") return "NFA-\u03b5";
+  return type;
+}
+
 function getTransitionFormula(type: AutomataAnalysisResult["automatonType"]) {
-  if (type === "DFA") return "delta: Q x Sigma -> Q";
-  if (type === "NFA") return "delta: Q x Sigma -> P(Q)";
-  return "delta: Q x (Sigma U {epsilon}) -> P(Q)";
+  if (type === "DFA") return `${DELTA}: Q ${TIMES} ${SIGMA} \u2192 Q`;
+  if (type === "NFA") return `${DELTA}: Q ${TIMES} ${SIGMA} \u2192 2^Q`;
+  return `${DELTA}: Q ${TIMES} (${SIGMA} ${UNION} {${EPSILON_DISPLAY}}) \u2192 2^Q`;
 }
 
 function getExtendedFormula(type: AutomataAnalysisResult["automatonType"]) {
-  if (type === "DFA") return "delta*: Q x Sigma* -> Q";
-  return "delta*: Q x Sigma* -> P(Q)";
+  if (type === "DFA") return `${DELTA_STAR}: Q ${TIMES} ${SIGMA}* \u2192 Q`;
+  return `${DELTA_STAR}: Q ${TIMES} ${SIGMA}* \u2192 2^Q`;
 }
 
 function getGroupedTransitions(analysis: AutomataAnalysisResult) {
@@ -32,6 +45,12 @@ function getGroupedTransitions(analysis: AutomataAnalysisResult) {
   return grouped;
 }
 
+function formatTargets(type: AutomataAnalysisResult["automatonType"], targets: string[]) {
+  if (targets.length === 0) return EMPTY_SET;
+  if (type === "DFA") return targets[0] ?? EMPTY_SET;
+  return `{${targets.join(", ")}}`;
+}
+
 export function FormalismPanel({
   hasStates,
   analysis,
@@ -42,7 +61,7 @@ export function FormalismPanel({
     return (
       <div className="flex h-full items-center justify-center p-6">
         <p className="text-center text-sm text-muted-foreground">
-          Agrega estados al canvas para ver el formalismo aqui.
+          Agrega estados al canvas para ver el formalismo.
         </p>
       </div>
     );
@@ -52,7 +71,7 @@ export function FormalismPanel({
     return (
       <div className="flex h-full items-center justify-center p-6">
         <p className="text-center text-sm text-muted-foreground">
-          Analizando el automata con el backend...
+          Analizando el autómata...
         </p>
       </div>
     );
@@ -62,43 +81,42 @@ export function FormalismPanel({
     return (
       <div className="flex h-full items-center justify-center p-6">
         <p className="text-center text-sm text-destructive">
-          No fue posible calcular el formalismo del automata.
+          No fue posible calcular el formalismo del autómata.
         </p>
       </div>
     );
   }
 
   const transitionSymbols = analysis.supportsEpsilon
-    ? [...analysis.alphabet, "epsilon"]
+    ? [...analysis.alphabet, EPSILON_DISPLAY]
     : analysis.alphabet;
   const groupedTransitions = getGroupedTransitions(analysis);
   const initialNames = analysis.initialStates.map((state) => state.name);
   const acceptNames = analysis.acceptStates.map((state) => state.name);
   const q0Value =
-    initialNames.length <= 1 ? initialNames[0] ?? "-" : `{${initialNames.join(", ")}}`;
+    initialNames.length <= 1 ? initialNames[0] ?? EMPTY_SET : `{${initialNames.join(", ")}}`;
 
   return (
     <ScrollArea className="h-full">
       <div className="space-y-5 p-4">
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Formalismos
-          </h3>
-          <div className="rounded-lg border bg-card p-3">
+        <section className="space-y-3 rounded-lg border bg-card p-3">
+          <div className="space-y-1">
             <p className="text-sm font-semibold text-foreground">
-              Tipo identificado: {analysis.automatonType}
+              Tipo identificado: {getTupleLabel(analysis.automatonType)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="font-mono text-xs text-muted-foreground">
               {getTransitionFormula(analysis.automatonType)}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="font-mono text-xs text-muted-foreground">
               {getExtendedFormula(analysis.automatonType)}
             </p>
           </div>
-        </div>
+        </section>
 
         <section className="space-y-3 rounded-lg border bg-card p-3">
-          <p className="font-mono text-sm text-foreground">M = (Q, Sigma, delta, q0, F)</p>
+          <p className="font-mono text-sm text-foreground">
+            {getTupleLabel(analysis.automatonType)} = (Q, {SIGMA}, {DELTA}, q\u2080, F)
+          </p>
 
           <div className="space-y-2 text-xs">
             <div>
@@ -109,16 +127,16 @@ export function FormalismPanel({
             </div>
 
             <div>
-              <span className="font-semibold text-primary">Sigma</span>
+              <span className="font-semibold text-primary">{SIGMA}</span>
               <span className="text-muted-foreground"> = {"{"}</span>
               <span className="font-mono">
-                {analysis.alphabet.length > 0 ? analysis.alphabet.join(", ") : "-"}
+                {analysis.alphabet.length > 0 ? analysis.alphabet.join(", ") : EMPTY_SET}
               </span>
               <span className="text-muted-foreground">{"}"}</span>
             </div>
 
             <div>
-              <span className="font-semibold text-primary">q0</span>
+              <span className="font-semibold text-primary">q\u2080</span>
               <span className="text-muted-foreground"> = </span>
               <span className="font-mono">{q0Value}</span>
             </div>
@@ -126,19 +144,17 @@ export function FormalismPanel({
             <div>
               <span className="font-semibold text-primary">F</span>
               <span className="text-muted-foreground"> = {"{"}</span>
-              <span className="font-mono">{acceptNames.length > 0 ? acceptNames.join(", ") : "-"}</span>
+              <span className="font-mono">{acceptNames.length > 0 ? acceptNames.join(", ") : EMPTY_SET}</span>
               <span className="text-muted-foreground">{"}"}</span>
             </div>
           </div>
         </section>
 
         <section className="space-y-3 rounded-lg border bg-card p-3">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Funcion de transicion delta</p>
-            <p className="text-xs text-muted-foreground">
-              {analysis.automatonType === "DFA"
-                ? "Cada par estado-simbolo tiene a lo sumo un destino."
-                : "Los destinos se representan como subconjuntos de Q."}
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Función de transición</p>
+            <p className="font-mono text-xs text-muted-foreground">
+              {getTransitionFormula(analysis.automatonType)}
             </p>
           </div>
 
@@ -147,10 +163,10 @@ export function FormalismPanel({
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="px-3 py-2 text-left font-semibold text-primary">delta</th>
+                    <th className="px-3 py-2 text-left font-semibold text-primary">Estado</th>
                     {transitionSymbols.map((symbol) => (
                       <th key={symbol} className="px-3 py-2 text-center font-mono font-semibold">
-                        {symbol === "epsilon" ? "epsilon" : symbol}
+                        {symbol}
                       </th>
                     ))}
                   </tr>
@@ -159,16 +175,15 @@ export function FormalismPanel({
                   {analysis.states.map((state) => (
                     <tr key={state.id} className="border-b last:border-0">
                       <td className="px-3 py-2 font-mono font-medium">
-                        {state.isInitial ? "-> " : ""}
-                        {state.isAccept ? "* " : ""}
+                        {state.isInitial ? "\u2192" : ""}
+                        {state.isAccept ? "*" : ""}
                         {state.name}
                       </td>
                       {transitionSymbols.map((symbol) => {
-                        const displaySymbol = symbol === "epsilon" ? "epsilon" : symbol;
-                        const targets = groupedTransitions.get(`${state.name}::${displaySymbol}`) ?? [];
+                        const targets = groupedTransitions.get(`${state.name}::${symbol}`) ?? [];
                         return (
                           <td key={`${state.id}-${symbol}`} className="px-3 py-2 text-center font-mono">
-                            {targets.length > 0 ? `{${targets.join(", ")}}` : "-"}
+                            {formatTargets(analysis.automatonType, targets)}
                           </td>
                         );
                       })}
@@ -179,17 +194,17 @@ export function FormalismPanel({
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Agrega simbolos y transiciones para completar la funcion delta.
+              Agrega símbolos y transiciones para completar la tabla.
             </p>
           )}
         </section>
 
         {analysis.supportsEpsilon && (
           <section className="space-y-3 rounded-lg border bg-card p-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">e-closure</p>
-              <p className="text-xs text-muted-foreground">
-                e-closure(q) reune todos los estados alcanzables desde q usando solo transiciones epsilon.
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">Clausura-{EPSILON_DISPLAY}</p>
+              <p className="font-mono text-xs text-muted-foreground">
+                Clausura-{EPSILON_DISPLAY}(q) = {"{"}p {"|"} q {"\u21dd"} p usando {EPSILON_DISPLAY}{"}"}
               </p>
             </div>
 
@@ -197,50 +212,14 @@ export function FormalismPanel({
               {analysis.eClosures.map((closure) => (
                 <div key={closure.stateId} className="rounded-md border px-3 py-2 text-xs">
                   <span className="font-mono font-semibold text-foreground">
-                    e-closure({closure.stateName})
+                    Clausura-{EPSILON_DISPLAY}({closure.stateName})
                   </span>
                   <span className="text-muted-foreground"> = </span>
-                  <span className="font-mono">{`{${closure.closureNames.join(", ")}}`}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="space-y-3 rounded-lg border bg-card p-3">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Funcion extendida delta*</p>
-            <p className="text-xs text-muted-foreground">
-              delta*(q, epsilon) = q para DFA, y delta*(S, epsilon) = S para NFA/NFA-E.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Para una palabra wa, primero se calcula delta* con el prefijo w y luego se aplica delta con el siguiente simbolo a.
-            </p>
-            {analysis.supportsEpsilon && (
-              <p className="text-xs text-muted-foreground">
-                En NFA-E, cada avance usa move y despues la e-closure del conjunto alcanzado.
-              </p>
-            )}
-          </div>
-        </section>
-
-        {analysis.determinismIssues.length > 0 && (
-          <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">Evidencia de no determinismo</p>
-              <p className="text-xs text-muted-foreground">
-                El backend encontro multiples destinos para al menos una pareja estado-simbolo.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              {analysis.determinismIssues.map((issue, index) => (
-                <div key={`${issue.stateId}-${issue.symbol}-${index}`} className="rounded-md border px-3 py-2 text-xs">
-                  <span className="font-mono">{issue.stateName}</span>
-                  <span className="text-muted-foreground"> con </span>
-                  <span className="font-mono">{issue.displaySymbol}</span>
-                  <span className="text-muted-foreground"> alcanza </span>
-                  <span className="font-mono">{`{${issue.targets.join(", ")}}`}</span>
+                  <span className="font-mono">
+                    {closure.closureNames.length > 0
+                      ? `{${closure.closureNames.join(", ")}}`
+                      : EMPTY_SET}
+                  </span>
                 </div>
               ))}
             </div>

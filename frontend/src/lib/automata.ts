@@ -1,7 +1,7 @@
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 
 export const EPSILON_SYMBOL = "";
-export const EPSILON_DISPLAY = "ε";
+export const EPSILON_DISPLAY = "\u03b5";
 
 export function normalizeSymbol(symbol: string): string {
   const normalized = symbol.trim();

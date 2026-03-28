@@ -11,7 +11,7 @@ import type {
 } from "./types.js";
 
 export const EPSILON_SYMBOL = "";
-export const EPSILON_DISPLAY = "ε";
+export const EPSILON_DISPLAY = "\u03b5";
 
 export function normalizeSymbol(symbol: string): string {
   return symbol.trim();

@@ -18,7 +18,7 @@ async function postJson<TResponse>(path: string, body: unknown): Promise<TRespon
   };
 
   if (!response.ok || !payload.ok || !payload.result) {
-    throw new Error(payload.error ?? "No fue posible completar la solicitud al backend.");
+    throw new Error(payload.error ?? "No fue posible completar la solicitud.");
   }
 
   return payload.result;

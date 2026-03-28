@@ -119,7 +119,7 @@ export function SettingsPanel({
                 <div>
                   <p className="font-medium text-foreground">Mostrar formalismos</p>
                   <p className="text-xs text-muted-foreground">
-                    Muestra la clasificacion, delta, e-closure y definiciones extendidas.
+                    Muestra la clasificación, la tabla de transición y la clausura-ε cuando aplique.
                   </p>
                 </div>
                 <Switch checked={showFormalism} onCheckedChange={onShowFormalismChange} />
@@ -165,9 +165,9 @@ export function SettingsPanel({
               <ol className="space-y-2 text-sm text-muted-foreground">
                 <li>1. Elige una herramienta en el panel izquierdo para seleccionar, crear o eliminar.</li>
                 <li>2. Agrega estados, arrastralos y define cuales son iniciales y de aceptacion.</li>
-                <li>3. Crea transiciones; si confirmas una etiqueta vacia, se registra una transicion epsilon.</li>
-                <li>4. Usa Formalismos para verificar tipo de automata, delta, e-closure y definiciones teoricas.</li>
-                <li>5. Usa Simulacion para obtener delta* y caminos aceptados o rechazados desde el backend.</li>
+                <li>3. Crea transiciones; si confirmas una etiqueta vacia, se registra una transicion ε.</li>
+                <li>4. Usa Formalismos para verificar el tipo, la 5-tupla y la tabla de transición.</li>
+                <li>5. Usa Simulación para recorrer δ* y revisar trazas de aceptación o rechazo.</li>
               </ol>
             </section>
 
@@ -175,57 +175,48 @@ export function SettingsPanel({
               <div>
                 <p className="text-sm font-semibold text-foreground">Los automatas</p>
                 <p className="text-xs text-muted-foreground">
-                  UPTCHEVRE clasifica automaticamente el automata construido como DFA, NFA o NFA-EPSILON.
+                  UPTCHEVRE clasifica automáticamente el autómata construido como DFA, NFA o NFA-ε.
                 </p>
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>DFA: cada pareja estado-simbolo conduce a un unico destino y no usa epsilon.</li>
+                <li>DFA: cada pareja estado-símbolo conduce a un único destino y no usa ε.</li>
                 <li>NFA: una misma pareja estado-simbolo puede abrir varios caminos posibles.</li>
-                <li>NFA-EPSILON: ademas del no determinismo, permite transiciones epsilon que no consumen entrada.</li>
+                <li>NFA-ε: además del no determinismo, permite transiciones ε que no consumen entrada.</li>
               </ul>
             </section>
 
             <section className="space-y-3 rounded-xl border bg-card p-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">Formalismos NFA</p>
-                <p className="text-xs text-muted-foreground">
-                  Para NFA, el backend formaliza delta como una funcion a subconjuntos.
-                </p>
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>M = (Q, Sigma, delta, q0, F).</li>
-                <li>delta: Q x Sigma -&gt; P(Q).</li>
-                <li>delta*(S, wa) se calcula aplicando primero delta* al prefijo w y luego delta con el simbolo a.</li>
-                <li>La tabla de formalismos muestra cada destino como conjunto de estados.</li>
+                <li>NFA = (Q, Σ, δ, q₀, F).</li>
+                <li>δ: Q × Σ -&gt; 2^Q.</li>
+                <li>La tabla de transición muestra cada destino como conjunto.</li>
+                <li>La simulación permite revisar δ* y las trazas paso a paso.</li>
               </ul>
             </section>
 
             <section className="space-y-3 rounded-xl border bg-card p-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">Formalismos NFA-E</p>
-                <p className="text-xs text-muted-foreground">
-                  Cuando existen transiciones epsilon, el backend incorpora e-closure y cierre por epsilon en cada paso.
-                </p>
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>delta: Q x (Sigma U {"{epsilon}"}) -&gt; P(Q).</li>
-                <li>e-closure(q) contiene todos los estados alcanzables desde q usando solo epsilon.</li>
-                <li>En delta*, primero se calcula move con el simbolo consumido y luego la e-closure del conjunto resultante.</li>
-                <li>La seccion Formalismos lista el cierre epsilon de cada estado cuando el automata lo requiere.</li>
+                <li>NFA-ε = (Q, Σ, δ, q₀, F).</li>
+                <li>δ: Q × (Σ ∪ {`ε`}) -&gt; 2^Q.</li>
+                <li>Clausura-ε(q): conjunto de estados alcanzables usando solo ε.</li>
+                <li>La sección Formalismos lista la clausura-ε de cada estado cuando aplica.</li>
               </ul>
             </section>
 
             <section className="space-y-3 rounded-xl border bg-card p-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">Simulacion</p>
-                <p className="text-xs text-muted-foreground">
-                  La simulacion ya no se calcula solo en cliente: el backend devuelve delta* y trazas de caminos.
-                </p>
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>Ejecutar consume toda la palabra y resalta el conjunto activo final.</li>
-                <li>Paso permite recorrer las trazas delta* prefijo por prefijo.</li>
-                <li>Para NFA y NFA-E se listan caminos aceptados y rechazados segun las rutas posibles.</li>
+                <li>Paso permite recorrer δ* prefijo por prefijo.</li>
+                <li>Para NFA y NFA-ε se listan trazas de aceptación y rechazo según las rutas posibles.</li>
                 <li>Una palabra se acepta si al menos un camino termina en un estado de aceptacion.</li>
               </ul>
             </section>
