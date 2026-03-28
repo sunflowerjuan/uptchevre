@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { AUTOMATA_EXAMPLES } from "@/constants/automataExamples";
 import { CREATORS } from "@/constants/creators";
+import { displayWord } from "@/lib/automata";
 
 interface SettingsPanelProps {
   showFormalism: boolean;
@@ -35,7 +36,7 @@ export function SettingsPanel({
             Configuracion
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Ajusta la apariencia y consulta la guia integrada del editor.
+            Ajusta la interfaz y consulta la documentacion teorica del editor.
           </p>
         </div>
 
@@ -54,15 +55,8 @@ export function SettingsPanel({
                 </p>
               </div>
 
-              <RadioGroup
-                value={theme}
-                onValueChange={setTheme}
-                className="grid gap-3 md:grid-cols-3"
-              >
-                <Label
-                  htmlFor="theme-system"
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-accent"
-                >
+              <RadioGroup value={theme} onValueChange={setTheme} className="grid gap-3 md:grid-cols-3">
+                <Label htmlFor="theme-system" className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-accent">
                   <RadioGroupItem id="theme-system" value="system" className="mt-1" />
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -75,10 +69,7 @@ export function SettingsPanel({
                   </div>
                 </Label>
 
-                <Label
-                  htmlFor="theme-light"
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-accent"
-                >
+                <Label htmlFor="theme-light" className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-accent">
                   <RadioGroupItem id="theme-light" value="light" className="mt-1" />
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -91,10 +82,7 @@ export function SettingsPanel({
                   </div>
                 </Label>
 
-                <Label
-                  htmlFor="theme-dark"
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-accent"
-                >
+                <Label htmlFor="theme-dark" className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 hover:bg-accent">
                   <RadioGroupItem id="theme-dark" value="dark" className="mt-1" />
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -124,23 +112,17 @@ export function SettingsPanel({
                     Visualiza la ejecucion de palabras sobre el automata.
                   </p>
                 </div>
-                <Switch
-                  checked={showSimulator}
-                  onCheckedChange={onShowSimulatorChange}
-                />
+                <Switch checked={showSimulator} onCheckedChange={onShowSimulatorChange} />
               </div>
 
               <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
                 <div>
-                  <p className="font-medium text-foreground">Mostrar formalismo</p>
+                  <p className="font-medium text-foreground">Mostrar formalismos</p>
                   <p className="text-xs text-muted-foreground">
-                    Muestra la definicion formal y la tabla de transiciones.
+                    Muestra la clasificacion, delta, e-closure y definiciones extendidas.
                   </p>
                 </div>
-                <Switch
-                  checked={showFormalism}
-                  onCheckedChange={onShowFormalismChange}
-                />
+                <Switch checked={showFormalism} onCheckedChange={onShowFormalismChange} />
               </div>
             </section>
 
@@ -154,21 +136,11 @@ export function SettingsPanel({
                 <div key={creator.name} className="rounded-lg border p-3">
                   <p className="font-medium text-foreground">{creator.name}</p>
                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
-                    <a
-                      href={creator.github}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 hover:text-foreground"
-                    >
+                    <a href={creator.github} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
                       <GitBranch className="h-3.5 w-3.5" />
                       GitHub
                     </a>
-                    <a
-                      href={creator.instagram}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 hover:text-foreground"
-                    >
+                    <a href={creator.instagram} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
                       <Instagram className="h-3.5 w-3.5" />
                       Instagram
                     </a>
@@ -185,39 +157,84 @@ export function SettingsPanel({
           <TabsContent value="help" className="space-y-4">
             <section className="space-y-3 rounded-xl border bg-card p-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">Que hace UPTCHEVRE hoy</p>
-                <p className="text-sm text-muted-foreground">
-                  El proyecto es un editor visual de automatas finitos con simulacion de palabras,
-                  representacion formal del automata y soporte de temas claro/oscuro.
+                <p className="text-sm font-semibold text-foreground">Empezar con la herramienta</p>
+                <p className="text-xs text-muted-foreground">
+                  Recorrido recomendado para construir y validar un automata desde cero.
                 </p>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border p-3">
-                  <p className="text-sm font-medium text-foreground">Canvas</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Espacio principal para crear estados, moverlos y conectar transiciones.
-                  </p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-sm font-medium text-foreground">Simulador</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Ejecuta palabras paso a paso o completas y resalta los estados activos.
-                  </p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-sm font-medium text-foreground">Formalismo</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Resume el automata como quintupla y tabla de transiciones.
-                  </p>
-                </div>
-              </div>
+              <ol className="space-y-2 text-sm text-muted-foreground">
+                <li>1. Elige una herramienta en el panel izquierdo para seleccionar, crear o eliminar.</li>
+                <li>2. Agrega estados, arrastralos y define cuales son iniciales y de aceptacion.</li>
+                <li>3. Crea transiciones; si confirmas una etiqueta vacia, se registra una transicion epsilon.</li>
+                <li>4. Usa Formalismos para verificar tipo de automata, delta, e-closure y definiciones teoricas.</li>
+                <li>5. Usa Simulacion para obtener delta* y caminos aceptados o rechazados desde el backend.</li>
+              </ol>
             </section>
 
             <section className="space-y-3 rounded-xl border bg-card p-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">Ejemplos interactivos</p>
+                <p className="text-sm font-semibold text-foreground">Los automatas</p>
                 <p className="text-xs text-muted-foreground">
-                  Carga un automata de referencia directamente en el canvas para explorar el editor.
+                  UPTCHEVRE clasifica automaticamente el automata construido como DFA, NFA o NFA-EPSILON.
+                </p>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>DFA: cada pareja estado-simbolo conduce a un unico destino y no usa epsilon.</li>
+                <li>NFA: una misma pareja estado-simbolo puede abrir varios caminos posibles.</li>
+                <li>NFA-EPSILON: ademas del no determinismo, permite transiciones epsilon que no consumen entrada.</li>
+              </ul>
+            </section>
+
+            <section className="space-y-3 rounded-xl border bg-card p-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Formalismos NFA</p>
+                <p className="text-xs text-muted-foreground">
+                  Para NFA, el backend formaliza delta como una funcion a subconjuntos.
+                </p>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>M = (Q, Sigma, delta, q0, F).</li>
+                <li>delta: Q x Sigma -&gt; P(Q).</li>
+                <li>delta*(S, wa) se calcula aplicando primero delta* al prefijo w y luego delta con el simbolo a.</li>
+                <li>La tabla de formalismos muestra cada destino como conjunto de estados.</li>
+              </ul>
+            </section>
+
+            <section className="space-y-3 rounded-xl border bg-card p-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Formalismos NFA-E</p>
+                <p className="text-xs text-muted-foreground">
+                  Cuando existen transiciones epsilon, el backend incorpora e-closure y cierre por epsilon en cada paso.
+                </p>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>delta: Q x (Sigma U {"{epsilon}"}) -&gt; P(Q).</li>
+                <li>e-closure(q) contiene todos los estados alcanzables desde q usando solo epsilon.</li>
+                <li>En delta*, primero se calcula move con el simbolo consumido y luego la e-closure del conjunto resultante.</li>
+                <li>La seccion Formalismos lista el cierre epsilon de cada estado cuando el automata lo requiere.</li>
+              </ul>
+            </section>
+
+            <section className="space-y-3 rounded-xl border bg-card p-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Simulacion</p>
+                <p className="text-xs text-muted-foreground">
+                  La simulacion ya no se calcula solo en cliente: el backend devuelve delta* y trazas de caminos.
+                </p>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>Ejecutar consume toda la palabra y resalta el conjunto activo final.</li>
+                <li>Paso permite recorrer las trazas delta* prefijo por prefijo.</li>
+                <li>Para NFA y NFA-E se listan caminos aceptados y rechazados segun las rutas posibles.</li>
+                <li>Una palabra se acepta si al menos un camino termina en un estado de aceptacion.</li>
+              </ul>
+            </section>
+
+            <section className="space-y-3 rounded-xl border bg-card p-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Ejemplos</p>
+                <p className="text-xs text-muted-foreground">
+                  Carga automatas de referencia directamente en el editor para probar teoria y simulacion.
                 </p>
               </div>
 
@@ -232,19 +249,14 @@ export function SettingsPanel({
                           Pruebas sugeridas:{" "}
                           {example.tryWords.map((word, index) => (
                             <span key={`${example.id}-${word || "epsilon"}-${index}`}>
-                              <span className="font-mono text-foreground">{word === "" ? "ε" : word}</span>
+                              <span className="font-mono text-foreground">{displayWord(word)}</span>
                               {index < example.tryWords.length - 1 ? ", " : ""}
                             </span>
                           ))}
                         </p>
                       </div>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="shrink-0"
-                        onClick={() => onLoadExample(example.data, example.title)}
-                      >
+                      <Button type="button" variant="outline" className="shrink-0" onClick={() => onLoadExample(example.data, example.title)}>
                         <PlayCircle className="h-4 w-4" />
                         Cargar ejemplo
                       </Button>
@@ -253,73 +265,9 @@ export function SettingsPanel({
                 ))}
               </div>
             </section>
-
-            <section className="space-y-3 rounded-xl border bg-card p-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Flujo recomendado</p>
-                <p className="text-xs text-muted-foreground">
-                  Sigue este recorrido para construir y probar un automata desde cero.
-                </p>
-              </div>
-              <ol className="space-y-2 text-sm text-muted-foreground">
-                <li>1. Selecciona una herramienta en el panel izquierdo.</li>
-                <li>2. Agrega estados sobre el canvas y reubicalos arrastrando.</li>
-                <li>3. Marca el estado inicial y los estados de aceptacion.</li>
-                <li>4. Crea transiciones y usa el simulador para validar palabras.</li>
-                <li>5. Revisa el formalismo para confirmar la definicion generada.</li>
-              </ol>
-            </section>
-
-            <section className="space-y-3 rounded-xl border bg-card p-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Controles del editor</p>
-                <p className="text-xs text-muted-foreground">
-                  Aqui quedaron reubicados los tips que antes aparecian en el footer.
-                </p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-lg border p-3 text-sm">
-                  <p className="font-medium text-foreground">Interacciones rapidas</p>
-                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    <li>Doble clic en un estado: activa o desactiva aceptacion.</li>
-                    <li>Doble clic en el nombre: renombra el estado.</li>
-                    <li>Clic derecho en un estado: lo marca como inicial.</li>
-                    <li>Ctrl + rueda del mouse: acerca o aleja el canvas.</li>
-                    <li>Arrastrar fondo con seleccionar: mueve la vista.</li>
-                  </ul>
-                </div>
-                <div className="rounded-lg border p-3 text-sm">
-                  <p className="font-medium text-foreground">Transiciones</p>
-                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    <li>Usa la herramienta de transicion y elige origen y destino.</li>
-                    <li>Puedes escribir varios simbolos con `a+b`, `a|b` o `a,b`.</li>
-                    <li>Las etiquetas de transicion se pueden editar con doble clic.</li>
-                    <li>Los bucles y transiciones opuestas se curvan automaticamente.</li>
-                  </ul>
-                </div>
-              </div>
-            </section>
-
-            <section className="space-y-3 rounded-xl border bg-card p-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Estado actual del producto</p>
-                <p className="text-xs text-muted-foreground">
-                  Documentacion breve de lo que esta implementado hasta este momento.
-                </p>
-              </div>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>Editor visual con herramientas para seleccionar, crear y eliminar.</li>
-                <li>Historial local con deshacer y rehacer desde el header o con teclado.</li>
-                <li>Simulacion de palabras con traza e iluminacion de estados.</li>
-                <li>Panel de formalismo con estados, alfabeto, estado inicial, finales y tabla.</li>
-                <li>Configuracion de tema y visibilidad de paneles desde ajustes.</li>
-                <li>Backend preparado para equivalencia de automatas, aunque esta vista aun no lo consume.</li>
-              </ul>
-            </section>
           </TabsContent>
         </Tabs>
       </div>
     </ScrollArea>
   );
 }
-
