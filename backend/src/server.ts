@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
+import { analyzeAutomaton } from "./automata-analysis.js";
 import { areAutomataEquivalent } from "./automata-equivalence.js";
+import { simulateAutomaton } from "./automata-simulation.js";
 import type { AutomataData } from "./types.js";
 
 const app = express();
@@ -11,6 +13,34 @@ app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "uptchevre-backend" });
+});
+
+app.post("/api/automata/analyze", (req, res) => {
+  const body = req.body as { automaton?: AutomataData };
+  if (!body?.automaton) {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata en el body.",
+    });
+    return;
+  }
+
+  const result = analyzeAutomaton(body.automaton);
+  res.json({ ok: true, result });
+});
+
+app.post("/api/automata/simulate", (req, res) => {
+  const body = req.body as { automaton?: AutomataData; word?: string };
+  if (!body?.automaton || typeof body.word !== "string") {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata y una palabra en el body.",
+    });
+    return;
+  }
+
+  const result = simulateAutomaton(body.automaton, body.word);
+  res.json({ ok: true, result });
 });
 
 app.post("/api/automata/equivalent", (req, res) => {

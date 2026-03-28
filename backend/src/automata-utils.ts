@@ -1,4 +1,5 @@
 import type { AutomataData, AutomataState, AutomataTransition } from "./types.js";
+import { getInputAlphabet, normalizeSymbol } from "./automata-analysis.js";
 
 export interface DeterminismIssue {
   stateId: string;
@@ -12,14 +13,7 @@ export interface DeterminismCheckResult {
 }
 
 export function getAlphabet(a: AutomataData): string[] {
-  if (a.alphabet && a.alphabet.length > 0) {
-    return Array.from(new Set(a.alphabet)).sort();
-  }
-  const symbols = new Set<string>();
-  for (const t of a.transitions) {
-    if (t.symbol) symbols.add(t.symbol);
-  }
-  return Array.from(symbols).sort();
+  return getInputAlphabet(a);
 }
 
 export function getInitialState(a: AutomataData): AutomataState | undefined {
@@ -31,9 +25,9 @@ export function checkDeterminism(a: AutomataData): DeterminismCheckResult {
   const byStateAndSymbol = new Map<string, AutomataTransition[]>();
 
   for (const t of a.transitions) {
-    const key = `${t.from}::${t.symbol}`;
+    const key = `${t.from}::${normalizeSymbol(t.symbol)}`;
     const list = byStateAndSymbol.get(key) ?? [];
-    list.push(t);
+    list.push({ ...t, symbol: normalizeSymbol(t.symbol) });
     byStateAndSymbol.set(key, list);
   }
 
@@ -62,7 +56,7 @@ export function buildDfaStructure(a: AutomataData): DfaStructure {
   const delta = new Map<string, string>();
 
   for (const t of a.transitions) {
-    delta.set(`${t.from}::${t.symbol}`, t.to);
+    delta.set(`${t.from}::${normalizeSymbol(t.symbol)}`, t.to);
   }
 
   const initial = getInitialState(a);
