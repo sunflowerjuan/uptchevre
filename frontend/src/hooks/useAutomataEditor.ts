@@ -1,5 +1,16 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { EPSILON_SYMBOL, normalizeSymbol } from "@/lib/automata";
+import {
+  archiveWorkspaceDocument,
+  cloneAutomataData,
+  createEmptyAutomatonData,
+  createWorkspaceDocument,
+  loadCurrentWorkspaceDocument,
+  loadRecentWorkspaceDocuments,
+  saveCurrentWorkspaceDocument,
+  saveRecentWorkspaceDocuments,
+  type AutomataWorkspaceDocument,
+} from "@/lib/automata-workspace";
 
 /**
  * Modelo teórico usado por el editor.
@@ -55,15 +66,28 @@ export function parseSymbols(input: string): string[] {
 const MAX_HISTORY = 80;
 
 export function useAutomataEditor() {
-  const [data, setData] = useState<AutomataData>({
-    states: [],
-    transitions: [],
-    alphabet: [],
-  });
+  const initialDocumentRef = useRef<AutomataWorkspaceDocument>(
+    loadCurrentWorkspaceDocument() ?? createWorkspaceDocument(),
+  );
+
+  const [data, setData] = useState<AutomataData>(() =>
+    cloneAutomataData(initialDocumentRef.current.automaton),
+  );
+  const [documentId, setDocumentId] = useState(initialDocumentRef.current.id);
+  const [documentName, setDocumentNameState] = useState(initialDocumentRef.current.name);
+  const [recentDocuments, setRecentDocuments] = useState<AutomataWorkspaceDocument[]>(() =>
+    loadRecentWorkspaceDocuments().filter((document) => document.id !== initialDocumentRef.current.id),
+  );
   const [selectedTool, setSelectedTool] = useState<EditorTool>("select");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [transitionStart, setTransitionStart] = useState<string | null>(null);
-  const [stateCounter, setStateCounter] = useState(0);
+  const [stateCounter, setStateCounter] = useState(() =>
+    initialDocumentRef.current.automaton.states.reduce((maxCounter, state) => {
+      const match = /^q(\d+)$/.exec(state.id);
+      if (!match) return maxCounter;
+      return Math.max(maxCounter, Number(match[1]) + 1);
+    }, 0),
+  );
 
   // Undo / Redo
   const historyRef = useRef<AutomataData[]>([]);
@@ -85,6 +109,40 @@ export function useAutomataEditor() {
     },
     [pushHistory]
   );
+
+  const buildCurrentWorkspace = useCallback(
+    () =>
+      createWorkspaceDocument({
+        id: documentId,
+        name: documentName,
+        automaton: data,
+      }),
+    [data, documentId, documentName],
+  );
+
+  const syncWorkspace = useCallback((document: AutomataWorkspaceDocument) => {
+    skipHistoryRef.current = true;
+    setData(cloneAutomataData(document.automaton));
+    setDocumentId(document.id);
+    setDocumentNameState(document.name);
+    historyRef.current = [];
+    futureRef.current = [];
+    skipHistoryRef.current = false;
+
+    const nextCounter = document.automaton.states.reduce((maxCounter, state) => {
+      const match = /^q(\d+)$/.exec(state.id);
+      if (!match) return maxCounter;
+      return Math.max(maxCounter, Number(match[1]) + 1);
+    }, 0);
+
+    setStateCounter(nextCounter);
+    setSelectedNode(null);
+    setTransitionStart(null);
+  }, []);
+
+  const pushCurrentToRecent = useCallback(() => {
+    setRecentDocuments((prev) => archiveWorkspaceDocument(buildCurrentWorkspace(), prev));
+  }, [buildCurrentWorkspace]);
 
   const undo = useCallback(() => {
     if (historyRef.current.length === 0) return;
@@ -124,6 +182,14 @@ export function useAutomataEditor() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [undo, redo]);
+
+  useEffect(() => {
+    saveCurrentWorkspaceDocument(buildCurrentWorkspace());
+  }, [buildCurrentWorkspace]);
+
+  useEffect(() => {
+    saveRecentWorkspaceDocuments(recentDocuments);
+  }, [recentDocuments]);
 
   const addState = useCallback(
     (x: number, y: number) => {
@@ -268,39 +334,56 @@ export function useAutomataEditor() {
   );
 
   const clearAll = useCallback(() => {
-    setDataWithHistory(() => ({
-      states: [],
-      transitions: [],
-      alphabet: [],
-    }));
-    setStateCounter(0);
-    setSelectedNode(null);
-    setTransitionStart(null);
-  }, [setDataWithHistory]);
+    pushCurrentToRecent();
+    syncWorkspace(
+      createWorkspaceDocument({
+        name: "A",
+        automaton: createEmptyAutomatonData(),
+      }),
+    );
+  }, [pushCurrentToRecent, syncWorkspace]);
 
   const loadAutomaton = useCallback(
-    (nextData: AutomataData) => {
-      setDataWithHistory({
-        states: nextData.states.map((state) => ({ ...state })),
-        transitions: nextData.transitions.map((transition) => ({ ...transition })),
-        alphabet: [...nextData.alphabet],
-      });
-
-      const nextCounter = nextData.states.reduce((maxCounter, state) => {
-        const match = /^q(\d+)$/.exec(state.id);
-        if (!match) return maxCounter;
-        return Math.max(maxCounter, Number(match[1]) + 1);
-      }, 0);
-
-      setStateCounter(nextCounter);
-      setSelectedNode(null);
-      setTransitionStart(null);
+    (nextData: AutomataData, options?: { name?: string; id?: string }) => {
+      pushCurrentToRecent();
+      syncWorkspace(
+        createWorkspaceDocument({
+          id: options?.id,
+          name: options?.name ?? documentName,
+          automaton: nextData,
+        }),
+      );
     },
-    [setDataWithHistory]
+    [documentName, pushCurrentToRecent, syncWorkspace]
+  );
+
+  const openRecentDocument = useCallback(
+    (document: AutomataWorkspaceDocument) => {
+      pushCurrentToRecent();
+      setRecentDocuments((prev) => prev.filter((entry) => entry.id !== document.id));
+      syncWorkspace(document);
+    },
+    [pushCurrentToRecent, syncWorkspace]
+  );
+
+  const setDocumentName = useCallback((nextName: string) => {
+    const normalizedName = nextName.trim();
+    setDocumentNameState(normalizedName.length > 0 ? normalizedName : "A");
+  }, []);
+
+  const currentDocument = buildCurrentWorkspace();
+
+  const exportDocument = useCallback(
+    () => createWorkspaceDocument(currentDocument),
+    [currentDocument],
   );
 
   return {
     data,
+    documentName,
+    setDocumentName,
+    currentDocument,
+    recentDocuments,
     selectedTool,
     setSelectedTool,
     selectedNode,
@@ -319,6 +402,8 @@ export function useAutomataEditor() {
     deleteTransition,
     clearAll,
     loadAutomaton,
+    openRecentDocument,
+    exportDocument,
     undo,
     redo,
     canUndo: historyRef.current.length > 0,
