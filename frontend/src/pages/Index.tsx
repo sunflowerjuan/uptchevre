@@ -27,6 +27,14 @@ const Index = () => {
         onUndo={editor.undo}
         onRedo={editor.redo}
         data={editor.data}
+        settingsPanel={
+          <SettingsPanel
+            showSimulator={showSimulator}
+            showFormalism={showFormalism}
+            onShowSimulatorChange={setShowSimulator}
+            onShowFormalismChange={setShowFormalism}
+          />
+        }
       />
 
       {/* Main content */}
@@ -65,29 +73,20 @@ const Index = () => {
               onClear={editor.clearAll}
             />
           </div>
-          {activeModule === "settings" ? (
-            <SettingsPanel
-              showSimulator={showSimulator}
-              showFormalism={showFormalism}
-              onShowSimulatorChange={setShowSimulator}
-              onShowFormalismChange={setShowFormalism}
-            />
-          ) : (
-            <>
-              {(activeModule === "both" || activeModule === "simulator") && showSimulator && (
-                <StringSimulator
-                  data={editor.data}
-                  highlightedStates={highlightedStates}
-                  onHighlight={handleHighlight}
-                />
-              )}
-              {(activeModule === "both" || activeModule === "formalism") && showFormalism && (
-                <div className="border-t">
-                  <FormalismPanel data={editor.data} />
-                </div>
-              )}
-            </>
-          )}
+          <>
+            {(activeModule === "both" || activeModule === "simulator") && showSimulator && (
+              <StringSimulator
+                data={editor.data}
+                highlightedStates={highlightedStates}
+                onHighlight={handleHighlight}
+              />
+            )}
+            {(activeModule === "both" || activeModule === "formalism") && showFormalism && (
+              <div className="border-t">
+                <FormalismPanel data={editor.data} />
+              </div>
+            )}
+          </>
         </aside>
       </div>
 

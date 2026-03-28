@@ -1,7 +1,7 @@
-import { ChevronLeft, ChevronRight, FileCode2, PlayCircle, Settings2, Table2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileCode2, PlayCircle, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type SidebarModule = "simulator" | "formalism" | "both" | "settings";
+export type SidebarModule = "simulator" | "formalism" | "both";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -14,7 +14,6 @@ const modules: { id: SidebarModule; label: string; icon: React.ElementType }[] =
   { id: "both", label: "Panel completo", icon: FileCode2 },
   { id: "simulator", label: "Simulador", icon: PlayCircle },
   { id: "formalism", label: "Formalismo", icon: Table2 },
-  { id: "settings", label: "Ajustes", icon: Settings2 },
 ];
 
 export function Sidebar({ collapsed, activeModule, onToggle, onSelectModule }: SidebarProps) {
@@ -28,7 +27,7 @@ export function Sidebar({ collapsed, activeModule, onToggle, onSelectModule }: S
         <div className="flex items-center justify-between border-b px-3 py-3">
           {!collapsed && (
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Modulos
+              Herramientas
             </p>
           )}
           <Button

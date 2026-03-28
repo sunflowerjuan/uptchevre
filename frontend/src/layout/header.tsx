@@ -1,5 +1,14 @@
-import { Bot, Redo2, Undo2 } from "lucide-react";
+import { Bot, Redo2, Settings2, Undo2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 
@@ -7,9 +16,10 @@ interface HeaderProps {
   onUndo: () => void;
   onRedo: () => void;
   data: AutomataData;
+  settingsPanel: ReactNode;
 }
 
-export function Header({ onUndo, onRedo, data }: HeaderProps) {
+export function Header({ onUndo, onRedo, data, settingsPanel }: HeaderProps) {
   return (
     <header className="flex items-center justify-between border-b bg-card px-5 py-3">
       <div className="flex items-center gap-3">
@@ -43,6 +53,29 @@ export function Header({ onUndo, onRedo, data }: HeaderProps) {
             <TooltipContent side="bottom">Rehacer (Ctrl+Y)</TooltipContent>
           </Tooltip>
         </div>
+
+        <Sheet>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Ajustes y ayuda</TooltipContent>
+          </Tooltip>
+
+          <SheetContent side="right" className="w-full sm:max-w-2xl p-0">
+            <SheetHeader className="border-b px-6 py-5">
+              <SheetTitle>Configuracion</SheetTitle>
+              <SheetDescription>
+                Personaliza la experiencia y consulta la ayuda del editor.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="h-[calc(100vh-88px)]">{settingsPanel}</div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       <div className="hidden text-xs text-muted-foreground sm:block">
