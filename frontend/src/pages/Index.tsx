@@ -1,4 +1,6 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { useAutomataEditor } from "@/hooks/useAutomataEditor";
 import { WorkArea } from "@/components/WorkArea";
 import { FormalismPanel } from "@/components/FormalismPanel";
@@ -7,8 +9,9 @@ import { EditorToolbar } from "@/components/EditorToolbar";
 import { Header } from "@/layout/header";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
 import { SettingsPanel } from "@/layout/settingsPanel";
-import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { toast } from "@/hooks/use-toast";
+import { analyzeAutomatonRequest } from "@/lib/automata-api";
+import { getTheorySnapshot } from "@/lib/automata";
 
 const Index = () => {
   const editor = useAutomataEditor();
@@ -17,6 +20,13 @@ const Index = () => {
   const [activeModule, setActiveModule] = useState<SidebarModule>("both");
   const [showSimulator, setShowSimulator] = useState(true);
   const [showFormalism, setShowFormalism] = useState(true);
+
+  const analysisQuery = useQuery({
+    queryKey: ["automata-analysis", getTheorySnapshot(editor.data)],
+    queryFn: () => analyzeAutomatonRequest(editor.data),
+    enabled: editor.data.states.length > 0,
+    refetchOnWindowFocus: false,
+  });
 
   const handleHighlight = useCallback((states: Set<string>) => {
     setHighlightedStates(states);
@@ -52,7 +62,6 @@ const Index = () => {
         }
       />
 
-      {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           collapsed={sidebarCollapsed}
@@ -88,17 +97,26 @@ const Index = () => {
               onClear={editor.clearAll}
             />
           </div>
+
           <>
             {(activeModule === "both" || activeModule === "simulator") && showSimulator && (
               <StringSimulator
                 data={editor.data}
-                highlightedStates={highlightedStates}
+                analysis={analysisQuery.data}
+                analysisLoading={analysisQuery.isLoading}
+                analysisError={analysisQuery.error instanceof Error ? analysisQuery.error.message : null}
                 onHighlight={handleHighlight}
               />
             )}
+
             {(activeModule === "both" || activeModule === "formalism") && showFormalism && (
               <div className="border-t">
-                <FormalismPanel data={editor.data} />
+                <FormalismPanel
+                  hasStates={editor.data.states.length > 0}
+                  analysis={analysisQuery.data}
+                  isLoading={analysisQuery.isLoading}
+                  error={analysisQuery.error instanceof Error ? analysisQuery.error.message : null}
+                />
               </div>
             )}
           </>

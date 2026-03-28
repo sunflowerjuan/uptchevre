@@ -1,188 +1,251 @@
-import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { AutomataAnalysisResult } from "@/lib/automata-api";
 
 interface FormalismPanelProps {
-  data: AutomataData;
+  hasStates: boolean;
+  analysis?: AutomataAnalysisResult;
+  isLoading: boolean;
+  error?: string | null;
 }
 
-/** Estados agrupados por nombre (label): dos nodos con el mismo nombre se consideran el mismo estado en el formalismo. */
-function useFormalismByLabel(data: AutomataData) {
-  const { states, transitions } = data;
-  const idToLabel = new Map(states.map((s) => [s.id, s.label]));
-
-  const uniqueLabels = [...new Set(states.map((s) => s.label))].sort();
-
-  const byLabel = new Map<
-    string,
-    { isInitial: boolean; isAccept: boolean; stateIds: string[] }
-  >();
-  for (const s of states) {
-    const cur = byLabel.get(s.label);
-    if (!cur) {
-      byLabel.set(s.label, {
-        isInitial: s.isInitial,
-        isAccept: s.isAccept,
-        stateIds: [s.id],
-      });
-    } else {
-      cur.stateIds.push(s.id);
-      cur.isInitial = cur.isInitial || s.isInitial;
-      cur.isAccept = cur.isAccept || s.isAccept;
-    }
-  }
-
-  const initialStateLabel =
-    uniqueLabels.find((label) => byLabel.get(label)?.isInitial) ?? null;
-  const acceptLabels = uniqueLabels.filter((label) => byLabel.get(label)?.isAccept);
-
-  function getTargetLabels(fromLabel: string, symbol: string): string[] {
-    const meta = byLabel.get(fromLabel);
-    if (!meta) return [];
-    const targetLabels = new Set<string>();
-    for (const fromId of meta.stateIds) {
-      for (const t of transitions) {
-        if (t.from === fromId && t.symbol === symbol) {
-          const toLabel = idToLabel.get(t.to) ?? "?";
-          targetLabels.add(toLabel);
-        }
-      }
-    }
-    return [...targetLabels].sort();
-  }
-
-  return {
-    uniqueLabels,
-    initialStateLabel,
-    acceptLabels,
-    byLabel,
-    getTargetLabels,
-  };
+function getTransitionFormula(type: AutomataAnalysisResult["automatonType"]) {
+  if (type === "DFA") return "delta: Q x Sigma -> Q";
+  if (type === "NFA") return "delta: Q x Sigma -> P(Q)";
+  return "delta: Q x (Sigma U {epsilon}) -> P(Q)";
 }
 
-export function FormalismPanel({ data }: FormalismPanelProps) {
-  const { states, transitions } = data;
-  const alphabet = [...new Set(transitions.map((t) => t.symbol))].sort();
-  const {
-    uniqueLabels,
-    initialStateLabel,
-    acceptLabels,
-    byLabel,
-    getTargetLabels,
-  } = useFormalismByLabel(data);
+function getExtendedFormula(type: AutomataAnalysisResult["automatonType"]) {
+  if (type === "DFA") return "delta*: Q x Sigma* -> Q";
+  return "delta*: Q x Sigma* -> P(Q)";
+}
 
-  if (states.length === 0) {
+function getGroupedTransitions(analysis: AutomataAnalysisResult) {
+  const grouped = new Map<string, string[]>();
+
+  for (const transition of analysis.transitions) {
+    const key = `${transition.fromName}::${transition.displaySymbol}`;
+    const list = grouped.get(key) ?? [];
+    list.push(transition.toName);
+    grouped.set(key, Array.from(new Set(list)).sort());
+  }
+
+  return grouped;
+}
+
+export function FormalismPanel({
+  hasStates,
+  analysis,
+  isLoading,
+  error,
+}: FormalismPanelProps) {
+  if (!hasStates) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <p className="text-center text-sm text-muted-foreground">
-          Agrega estados al canvas para ver el formalismo aquí.
+          Agrega estados al canvas para ver el formalismo aqui.
         </p>
       </div>
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <p className="text-center text-sm text-muted-foreground">
+          Analizando el automata con el backend...
+        </p>
+      </div>
+    );
+  }
+
+  if (error || !analysis) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <p className="text-center text-sm text-destructive">
+          No fue posible calcular el formalismo del automata.
+        </p>
+      </div>
+    );
+  }
+
+  const transitionSymbols = analysis.supportsEpsilon
+    ? [...analysis.alphabet, "epsilon"]
+    : analysis.alphabet;
+  const groupedTransitions = getGroupedTransitions(analysis);
+  const initialNames = analysis.initialStates.map((state) => state.name);
+  const acceptNames = analysis.acceptStates.map((state) => state.name);
+  const q0Value =
+    initialNames.length <= 1 ? initialNames[0] ?? "-" : `{${initialNames.join(", ")}}`;
+
   return (
     <ScrollArea className="h-full">
       <div className="space-y-5 p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Definición Formal
-        </h3>
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Formalismos
+          </h3>
+          <div className="rounded-lg border bg-card p-3">
+            <p className="text-sm font-semibold text-foreground">
+              Tipo identificado: {analysis.automatonType}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {getTransitionFormula(analysis.automatonType)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {getExtendedFormula(analysis.automatonType)}
+            </p>
+          </div>
+        </div>
 
-        <p className="text-[11px] text-muted-foreground">
-          Estados con el mismo nombre se consideran un único estado.
-        </p>
-
-        <div className="rounded-lg border bg-card p-3 space-y-3">
-          {/* 5-tuple */}
-          <p className="font-mono text-sm text-foreground">
-            M = (Q, Σ, δ, q₀, F)
-          </p>
+        <section className="space-y-3 rounded-lg border bg-card p-3">
+          <p className="font-mono text-sm text-foreground">M = (Q, Sigma, delta, q0, F)</p>
 
           <div className="space-y-2 text-xs">
             <div>
               <span className="font-semibold text-primary">Q</span>
               <span className="text-muted-foreground"> = {"{"}</span>
-              <span className="font-mono">
-                {uniqueLabels.join(", ")}
-              </span>
+              <span className="font-mono">{analysis.states.map((state) => state.name).join(", ")}</span>
               <span className="text-muted-foreground">{"}"}</span>
             </div>
 
             <div>
-              <span className="font-semibold text-primary">Σ</span>
+              <span className="font-semibold text-primary">Sigma</span>
               <span className="text-muted-foreground"> = {"{"}</span>
               <span className="font-mono">
-                {alphabet.length > 0 ? alphabet.join(", ") : "∅"}
+                {analysis.alphabet.length > 0 ? analysis.alphabet.join(", ") : "-"}
               </span>
               <span className="text-muted-foreground">{"}"}</span>
             </div>
 
             <div>
-              <span className="font-semibold text-primary">q₀</span>
+              <span className="font-semibold text-primary">q0</span>
               <span className="text-muted-foreground"> = </span>
-              <span className="font-mono">
-                {initialStateLabel ?? "—"}
-              </span>
+              <span className="font-mono">{q0Value}</span>
             </div>
 
             <div>
               <span className="font-semibold text-primary">F</span>
               <span className="text-muted-foreground"> = {"{"}</span>
-              <span className="font-mono">
-                {acceptLabels.length > 0 ? acceptLabels.join(", ") : "∅"}
-              </span>
+              <span className="font-mono">{acceptNames.length > 0 ? acceptNames.join(", ") : "-"}</span>
               <span className="text-muted-foreground">{"}"}</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Transition table */}
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Tabla de Transiciones (δ)
-          </h4>
-          {alphabet.length > 0 && uniqueLabels.length > 0 ? (
+        <section className="space-y-3 rounded-lg border bg-card p-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Funcion de transicion delta</p>
+            <p className="text-xs text-muted-foreground">
+              {analysis.automatonType === "DFA"
+                ? "Cada par estado-simbolo tiene a lo sumo un destino."
+                : "Los destinos se representan como subconjuntos de Q."}
+            </p>
+          </div>
+
+          {transitionSymbols.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="px-3 py-2 text-left font-semibold text-primary">δ</th>
-                    {alphabet.map((sym) => (
-                      <th key={sym} className="px-3 py-2 text-center font-mono font-semibold">
-                        {sym}
+                    <th className="px-3 py-2 text-left font-semibold text-primary">delta</th>
+                    {transitionSymbols.map((symbol) => (
+                      <th key={symbol} className="px-3 py-2 text-center font-mono font-semibold">
+                        {symbol === "epsilon" ? "epsilon" : symbol}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {uniqueLabels.map((label) => {
-                    const meta = byLabel.get(label)!;
-                    return (
-                      <tr key={label} className="border-b last:border-0">
-                        <td className="px-3 py-2 font-mono font-medium">
-                          {meta.isInitial && "→ "}
-                          {meta.isAccept && "* "}
-                          {label}
-                        </td>
-                        {alphabet.map((sym) => {
-                          const targets = getTargetLabels(label, sym);
-                          return (
-                            <td key={sym} className="px-3 py-2 text-center font-mono">
-                              {targets.length > 0 ? targets.join(", ") : "—"}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
+                  {analysis.states.map((state) => (
+                    <tr key={state.id} className="border-b last:border-0">
+                      <td className="px-3 py-2 font-mono font-medium">
+                        {state.isInitial ? "-> " : ""}
+                        {state.isAccept ? "* " : ""}
+                        {state.name}
+                      </td>
+                      {transitionSymbols.map((symbol) => {
+                        const displaySymbol = symbol === "epsilon" ? "epsilon" : symbol;
+                        const targets = groupedTransitions.get(`${state.name}::${displaySymbol}`) ?? [];
+                        return (
+                          <td key={`${state.id}-${symbol}`} className="px-3 py-2 text-center font-mono">
+                            {targets.length > 0 ? `{${targets.join(", ")}}` : "-"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Agrega transiciones para ver la tabla.
+              Agrega simbolos y transiciones para completar la funcion delta.
             </p>
           )}
-        </div>
+        </section>
+
+        {analysis.supportsEpsilon && (
+          <section className="space-y-3 rounded-lg border bg-card p-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">e-closure</p>
+              <p className="text-xs text-muted-foreground">
+                e-closure(q) reune todos los estados alcanzables desde q usando solo transiciones epsilon.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {analysis.eClosures.map((closure) => (
+                <div key={closure.stateId} className="rounded-md border px-3 py-2 text-xs">
+                  <span className="font-mono font-semibold text-foreground">
+                    e-closure({closure.stateName})
+                  </span>
+                  <span className="text-muted-foreground"> = </span>
+                  <span className="font-mono">{`{${closure.closureNames.join(", ")}}`}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="space-y-3 rounded-lg border bg-card p-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Funcion extendida delta*</p>
+            <p className="text-xs text-muted-foreground">
+              delta*(q, epsilon) = q para DFA, y delta*(S, epsilon) = S para NFA/NFA-E.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Para una palabra wa, primero se calcula delta* con el prefijo w y luego se aplica delta con el siguiente simbolo a.
+            </p>
+            {analysis.supportsEpsilon && (
+              <p className="text-xs text-muted-foreground">
+                En NFA-E, cada avance usa move y despues la e-closure del conjunto alcanzado.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {analysis.determinismIssues.length > 0 && (
+          <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Evidencia de no determinismo</p>
+              <p className="text-xs text-muted-foreground">
+                El backend encontro multiples destinos para al menos una pareja estado-simbolo.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {analysis.determinismIssues.map((issue, index) => (
+                <div key={`${issue.stateId}-${issue.symbol}-${index}`} className="rounded-md border px-3 py-2 text-xs">
+                  <span className="font-mono">{issue.stateName}</span>
+                  <span className="text-muted-foreground"> con </span>
+                  <span className="font-mono">{issue.displaySymbol}</span>
+                  <span className="text-muted-foreground"> alcanza </span>
+                  <span className="font-mono">{`{${issue.targets.join(", ")}}`}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </ScrollArea>
   );
