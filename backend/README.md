@@ -276,32 +276,6 @@ Ejemplo:
 }
 ```
 
-Campos importantes de `result`:
-
-- `automatonType`
-  Tipo identificado: `DFA`, `NFA` o `NFA_EPSILON`.
-
-- `alphabet`
-  Alfabeto de entrada sin `ε`.
-
-- `states`
-  Estados preparados para la vista formal.
-
-- `initialStates`
-  Subconjunto de estados iniciales.
-
-- `acceptStates`
-  Subconjunto `F`.
-
-- `transitions`
-  Lista normalizada de transiciones, incluyendo `displaySymbol`.
-
-- `determinismIssues`
-  Conflictos que impiden tratar el automata como DFA.
-
-- `eClosures`
-  Clausura-`ε` por estado.
-
 #### Response 400
 
 ```json
@@ -374,26 +348,6 @@ Ejemplo:
   }
 }
 ```
-
-Campos importantes de `result`:
-
-- `automatonType`
-  Tipo identificado antes de simular.
-
-- `accepted`
-  Veredicto final sobre la palabra.
-
-- `word`
-  Cadena procesada.
-
-- `deltaStar`
-  Secuencia serializada de `delta*`.
-
-- `acceptedPaths`
-  Caminos concretos que terminan en aceptacion.
-
-- `rejectedPaths`
-  Caminos concretos que terminan en rechazo.
 
 #### Response 400
 
@@ -497,7 +451,7 @@ Ejemplo:
 }
 ```
 
-## Archivos clave
+## Clases clave
 
 ### `src/types.ts`
 
@@ -702,19 +656,6 @@ Restriccion:
 
 - este metodo asume comportamiento determinista; si el automata no cumple las condiciones, devuelve un error funcional en `result`
 
-## Headers y consideraciones generales
-
-- `Content-Type: application/json`
-  Obligatorio en los `POST`.
-
-- `Accept: application/json`
-  Recomendado para clientes HTTP.
-
-- `cors()`
-  El servicio permite consumo desde la interfaz en desarrollo y despliegue.
-
-- `express.json({ limit: "1mb" })`
-  El body JSON tiene limite de 1 MB.
 
 ## Convenciones importantes del proyecto
 
@@ -723,13 +664,4 @@ Restriccion:
 - la equivalencia esta pensada para DFA
 - `delta*` se devuelve como estructura serializada para ser explicada paso a paso en la interfaz
 
-## Recomendacion de lectura
 
-Si entras por primera vez al backend, lee en este orden:
-
-1. `src/types.ts`
-2. `src/automata-analysis.ts`
-3. `src/automata-simulation.ts`
-4. `src/automata-utils.ts`
-5. `src/automata-equivalence.ts`
-6. `src/server.ts`

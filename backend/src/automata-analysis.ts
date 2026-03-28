@@ -11,15 +11,15 @@ import type {
 } from "./types.js";
 
 /**
- * Núcleo formal del análisis.
+ * Nucleo formal del analisis.
  *
- * Este módulo define cómo el proyecto interpreta la teoría de autómatas:
- * - qué cuenta como símbolo de entrada
- * - cómo se detecta ε
- * - cómo se construye una vista indexada de δ
- * - cómo se calcula move
- * - cómo se calcula la clausura-ε
- * - cómo se clasifica un autómata como DFA, NFA o NFA-ε
+ * Este modulo define como se interpreta la teoria de automatas:
+ * - que cuenta como simbolo de entrada
+ * - como se detecta epsilon
+ * - como se construye una vista indexada de FT
+ * - como se calcula move
+ * - como se calcula la clausura-e
+ * - como se clasifica un automata como DFA, NFA o NFA-e
  */
 export const EPSILON_SYMBOL = "";
 export const EPSILON_DISPLAY = "\u03b5";
@@ -33,7 +33,7 @@ export function isEpsilonSymbol(symbol: string): boolean {
 }
 
 export function getInputAlphabet(automaton: AutomataData): string[] {
-  // Σ nunca incluye ε; las transiciones vacías se modelan aparte.
+  // sigma nunca incluye epsilon; las transiciones vacias se modelan aparte.
   const explicitAlphabet = automaton.alphabet
     .map(normalizeSymbol)
     .filter((symbol) => !isEpsilonSymbol(symbol));
@@ -61,8 +61,8 @@ export function getInitialStates(automaton: AutomataData): AutomataState[] {
 }
 
 export function getStateNameMap(automaton: AutomataData): Map<string, string> {
-  // La teoría opera con nombres de estado. La UI aporta ids y labels.
-  // Este mapa decide el nombre formal estable que se mostrará en la interfaz.
+  // La teoria opera con nombres de estado. La UI aporta ids y labels.
+  // Este mapa decide el nombre formal estable que se mostrara en la interfaz.
   const labelCount = new Map<string, number>();
 
   for (const state of automaton.states) {
@@ -89,7 +89,7 @@ export function getStateNameMap(automaton: AutomataData): Map<string, string> {
 export interface TransitionMap {
   stateMap: Map<string, AutomataState>;
   nameMap: Map<string, string>;
-  /** Vista indexada de δ por clave (estado, símbolo). */
+  // Vista indexada de FT por clave (estado, simbolo). 
   outgoing: Map<string, AutomataTransition[]>;
 }
 
@@ -122,9 +122,9 @@ export function epsilonClosure(
   startIds: Iterable<string>,
 ): Set<string> {
   /**
-   * Clausura-ε:
-   * conjunto de estados alcanzables desde startIds usando cero o más
-   * transiciones ε. Siempre contiene a startIds.
+   * Clausura-e:
+   * conjunto de estados alcanzables desde startIds usando cero o mas
+   * transiciones e. Siempre contiene a startIds.
    */
   const { outgoing } = buildTransitionMap(automaton);
   const closure = new Set<string>(startIds);
@@ -171,8 +171,8 @@ export function move(
 
 export function getDeterminismIssues(automaton: AutomataData): DeterminismIssueDescriptor[] {
   // El modelo deja de ser DFA si:
-  // - hay más de un estado inicial
-  // - una pareja (estado, símbolo) tiene más de un destino
+  // - hay mas de un estado inicial
+  // - una pareja (estado, simbolo) tiene mas de un destino
   const { nameMap, outgoing } = buildTransitionMap(automaton);
   const issues: DeterminismIssueDescriptor[] = [];
 
@@ -203,9 +203,9 @@ export function getDeterminismIssues(automaton: AutomataData): DeterminismIssueD
 }
 
 export function detectAutomatonType(automaton: AutomataData): AutomatonType {
-  // Orden de decisión:
-  // 1. Si aparece ε, el autómata es NFA-ε.
-  // 2. Si no hay ε pero sí múltiples destinos, es NFA.
+  // Orden de decision:
+  // 1. Si aparece e, el automata es NFA-e.
+  // 2. Si no hay e pero si multiples destinos, es NFA.
   // 3. En otro caso, es DFA.
   const hasEpsilon = automaton.transitions.some((transition) =>
     isEpsilonSymbol(transition.symbol),
@@ -225,11 +225,11 @@ export function detectAutomatonType(automaton: AutomataData): AutomatonType {
 
 export function analyzeAutomaton(automaton: AutomataData): AutomataAnalysisResult {
   /**
-   * Traduce el autómata al vocabulario formal que consume la interfaz:
+   * Traduce el automata al vocabulario formal que consume la interfaz:
    * - 5-tupla
-   * - conjuntos de iniciales y de aceptación
-   * - tabla de transición
-   * - clausura-ε por estado
+   * - conjuntos de iniciales y de aceptacion
+   * - tabla de transicion
+   * - clausura-e por estado
    */
   const nameMap = getStateNameMap(automaton);
   const automatonType = detectAutomatonType(automaton);

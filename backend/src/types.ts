@@ -2,12 +2,12 @@
  * Contrato formal compartido por las operaciones teóricas del backend.
  *
  * Todas las funciones del backend parten del mismo modelo:
- * A = (Q, Sigma, delta, q0, F)
+ * A = (Q, SIGMA, DELTA, q0, F)
  *
  * Estas interfaces sirven para representar:
  * - el automata base dibujado por el usuario
  * - la proyección formal que consume la interfaz
- * - los pasos de simulación de 
+ * - los pasos de simulación de la función de transición extendida
  * - las trazas concretas de aceptación y rechazo
  */
 export interface AutomataState {

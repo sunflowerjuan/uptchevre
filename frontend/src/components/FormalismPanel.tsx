@@ -5,12 +5,12 @@ import type { AutomataAnalysisResult } from "@/lib/automata-api";
 /**
  * Presentación visual del formalismo.
  *
- * Este componente muestra en pantalla la interpretación matemática del
+ * Este componente muestra en pantalla la interpretación matematica del
  * autómata ya analizado:
  * - 5-tupla
  * - matriz de transición
- * - definiciones explícitas de δ
- * - clausura-ε por estado cuando aplica
+ * - definiciones explícitas de FT
+ * - clausura-e por estado cuando aplica
  */
 interface FormalismPanelProps {
   hasStates: boolean;

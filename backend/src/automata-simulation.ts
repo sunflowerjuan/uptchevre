@@ -18,11 +18,8 @@ import type {
 /**
  * Simulación formal de palabras.
  *
- * Este módulo aplica la definición de δ*:
- * - DFA:    δ*(q, ε) = q
- * - NFA:    δ*(q, ε) = {q}
- * - NFA-ε:  δ*(q, ε) = E(q)
- *
+ * Este módulo aplica la definición de FTE a una palabra dada un autómata, 
+ * y devuelve la traza completa de estados alcanzados en cada paso, incluyendo los estados.:
  * Después avanza símbolo a símbolo combinando move y clausura-ε.
  */
 function getAcceptedSet(automaton: AutomataData): Set<string> {
@@ -31,7 +28,7 @@ function getAcceptedSet(automaton: AutomataData): Set<string> {
 
 function buildDeltaStar(automaton: AutomataData, word: string): DeltaStarStep[] {
   /**
-   * Construye explícitamente la evolución de δ* sobre toda la palabra.
+   * Construye explícitamente la evolución de FTE sobre toda la palabra.
    *
    * El paso 0 es el caso base.
    * Cada paso posterior registra:
@@ -86,7 +83,7 @@ function enumeratePaths(
   /**
    * Recorre caminos concretos para fines explicativos.
    *
-   * δ* decide aceptación a nivel de conjunto.
+   * decide aceptación a nivel de conjunto.
    * Estas trazas muestran ejemplos de ramas particulares útiles para docencia.
    */
   const { outgoing, nameMap } = buildTransitionMap(automaton);
@@ -205,7 +202,7 @@ function enumeratePaths(
 export function simulateAutomaton(automaton: AutomataData, word: string): AutomataSimulationResult {
   /**
    * Evalúa la palabra completa y devuelve:
-   * - los pasos de δ*
+   * - los pasos de FTE sobre la palabra
    * - el veredicto de aceptación
    * - trazas concretas de apoyo
    */

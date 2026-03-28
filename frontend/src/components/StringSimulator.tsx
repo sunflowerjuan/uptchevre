@@ -13,9 +13,9 @@ import { simulateAutomatonRequest } from "@/lib/automata-api";
 import { displayWord, getTheorySnapshot } from "@/lib/automata";
 
 /**
- * Presentación pedagógica de la simulación.
+ * Presentación a usuario de la simulación.
  *
- * El cálculo formal de δ* ya llega resuelto; este componente organiza su
+ * El cálculo formal de FTE se obtiene mediante la api del backend, este componente organiza su
  * visualización como:
  * - caso base
  * - pasos recursivos
