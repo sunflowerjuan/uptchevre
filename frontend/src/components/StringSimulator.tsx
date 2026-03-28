@@ -22,16 +22,36 @@ interface StringSimulatorProps {
 
 type SimStatus = "idle" | "running" | "accepted" | "rejected";
 
-function getTupleTrace(path: SimulationPath) {
-  if (path.steps.length === 0) {
-    return [];
-  }
-
-  return path.steps.map((step) => `(${step.fromName}, ${step.displaySymbol}, ${step.toName})`);
+function formatStateSet(names: string[]) {
+  return names.length > 0 ? `{${names.join(", ")}}` : "\u2205";
 }
 
-function renderPathCard(path: SimulationPath, tone: "accepted" | "rejected", index: number) {
-  const tuples = getTupleTrace(path);
+function formatInitialArgument(analysis?: AutomataAnalysisResult) {
+  if (!analysis || analysis.initialStates.length === 0) return "q\u2080";
+  if (analysis.automatonType === "DFA") return analysis.initialStates[0]?.name ?? "q\u2080";
+  return formatStateSet(analysis.initialStates.map((state) => state.name));
+}
+
+function getVisibleTuples(path: SimulationPath, currentStepIndex: number, revealAll: boolean) {
+  if (revealAll) {
+    return path.steps.map((step) => `(${step.fromName}, ${step.displaySymbol}, ${step.toName})`);
+  }
+
+  if (currentStepIndex < 0) return [];
+
+  return path.steps
+    .filter((step) => step.consumedIndex <= currentStepIndex)
+    .map((step) => `(${step.fromName}, ${step.displaySymbol}, ${step.toName})`);
+}
+
+function renderPathCard(
+  path: SimulationPath,
+  tone: "accepted" | "rejected",
+  index: number,
+  currentStepIndex: number,
+  revealAll: boolean,
+) {
+  const tuples = getVisibleTuples(path, currentStepIndex, revealAll);
   const toneClass =
     tone === "accepted"
       ? "border-green-500/20 bg-green-500/5"
@@ -52,12 +72,55 @@ function renderPathCard(path: SimulationPath, tone: "accepted" | "rejected", ind
         </div>
       ) : (
         <p className="mt-2 text-muted-foreground">
-          Sin transición: inicia y termina en {path.stateNames[0] ?? "-"}.
+          La traza se construirá al avanzar la simulación.
         </p>
       )}
-      <p className="mt-2 text-muted-foreground">{resultLabel}</p>
+      {(revealAll || currentStepIndex >= path.haltedAtIndex) && (
+        <p className="mt-2 text-muted-foreground">{resultLabel}</p>
+      )}
     </div>
   );
+}
+
+function getAcceptanceCriterion(type: NonNullable<AutomataAnalysisResult>["automatonType"]) {
+  if (type === "DFA") return "Acepta w si \u03b4*(q\u2080, w) \u2208 F.";
+  return "Acepta w si \u03b4*(q\u2080, w) \u2229 F \u2260 \u2205.";
+}
+
+function getDeltaStarLine(
+  analysis: NonNullable<AutomataAnalysisResult>,
+  simulation: AutomataSimulationResult,
+  traceIndex: number,
+) {
+  const trace = simulation.deltaStar[traceIndex];
+  const initialArgument = formatInitialArgument(analysis);
+
+  if (traceIndex === 0) {
+    if (analysis.automatonType === "DFA") {
+      return `Base: \u03b4*(${initialArgument}, \u03b5) = ${trace.closureStateNames[0] ?? "\u2205"}`;
+    }
+
+    if (analysis.automatonType === "NFA") {
+      return `Base: \u03b4*(${initialArgument}, \u03b5) = ${formatStateSet(trace.closureStateNames)}`;
+    }
+
+    return `Base: \u03b4*(${initialArgument}, \u03b5) = Clausura-\u03b5(${initialArgument}) = ${formatStateSet(trace.closureStateNames)}`;
+  }
+
+  const previous = simulation.deltaStar[traceIndex - 1];
+  const previousPrefix = previous.prefix === "" ? "\u03b5" : previous.prefix;
+  const consumedSymbol = trace.displayConsumedSymbol ?? trace.consumedSymbol ?? "\u03b5";
+  const currentPrefix = trace.prefix === "" ? "\u03b5" : trace.prefix;
+
+  if (analysis.automatonType === "DFA") {
+    return `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = \u03b4(\u03b4*(${initialArgument}, ${previousPrefix}), ${consumedSymbol}) = \u03b4(${previous.closureStateNames[0] ?? "\u2205"}, ${consumedSymbol}) = ${trace.closureStateNames[0] ?? "\u2205"}`;
+  }
+
+  if (analysis.automatonType === "NFA") {
+    return `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = \u22c3 \u03b4(p, ${consumedSymbol}), p \u2208 ${formatStateSet(previous.closureStateNames)} = ${formatStateSet(trace.closureStateNames)}`;
+  }
+
+  return `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = Clausura-\u03b5(\u22c3 \u03b4(p, ${consumedSymbol}), p \u2208 ${formatStateSet(previous.closureStateNames)}) = ${formatStateSet(trace.closureStateNames)}`;
 }
 
 export function StringSimulator({
@@ -132,7 +195,11 @@ export function StringSimulator({
   const stepForward = useCallback(async () => {
     if (!simulation || simulation.word !== input) {
       const result = await simulationMutation.mutateAsync(input);
-      commitResult(result, 0, result.deltaStar.length > 1 ? "running" : result.accepted ? "accepted" : "rejected");
+      commitResult(
+        result,
+        0,
+        result.deltaStar.length > 1 ? "running" : result.accepted ? "accepted" : "rejected",
+      );
       return;
     }
 
@@ -148,6 +215,8 @@ export function StringSimulator({
 
     commitResult(simulation, nextStepIndex, nextStatus);
   }, [commitResult, input, lastStepIndex, simulation, simulationMutation, stepIndex]);
+
+  const revealAllTraces = status === "accepted" || status === "rejected";
 
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -243,7 +312,7 @@ export function StringSimulator({
             </div>
           )}
 
-          {simulation && (
+          {simulation && analysis && (
             <>
               <section className="space-y-2 rounded-lg border p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -252,7 +321,7 @@ export function StringSimulator({
                       Función de transición extendida
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Muestra {`\u03b4*`} carácter a carácter para la palabra actual.
+                      Base y paso recursivo aplicados a la palabra actual.
                     </p>
                   </div>
                   <Button
@@ -269,33 +338,34 @@ export function StringSimulator({
 
                 {showDeltaStar && (
                   <div className="space-y-2">
-                    {simulation.deltaStar.map((trace) => {
-                      const isActive = trace.index === stepIndex;
-                      const leftOperand =
-                        trace.index === 0
-                          ? analysis?.automatonType === "DFA"
-                            ? analysis.initialStates[0]?.name ?? "q\u2080"
-                            : `{${analysis?.initialStates.map((state) => state.name).join(", ") ?? ""}}`
-                          : `{${simulation.deltaStar[trace.index - 1]?.closureStateNames.join(", ")}}`;
-                      const consumedSymbol = trace.index === 0 ? "\u03b5" : trace.displayConsumedSymbol;
-                      const resultSet =
-                        trace.closureStateNames.length > 0
-                          ? `{${trace.closureStateNames.join(", ")}}`
-                          : "\u2205";
+                    <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs">
+                      <p className="font-mono text-foreground">
+                        {analysis.automatonType === "DFA"
+                          ? "\u03b4*: Q \u00d7 \u03a3* \u2192 Q"
+                          : "\u03b4*: Q \u00d7 \u03a3* \u2192 2^Q"}
+                      </p>
+                      <p className="mt-1 text-muted-foreground">
+                        {getAcceptanceCriterion(analysis.automatonType)}
+                      </p>
+                    </div>
 
-                      return (
-                        <div
-                          key={`${trace.index}-${trace.prefix}`}
-                          className={`rounded-lg border px-3 py-2 text-xs ${
-                            isActive ? "border-primary bg-primary/5" : "bg-card"
-                          }`}
-                        >
-                          <p className="font-mono text-foreground">
-                            {`\u03b4*`}({leftOperand}, {consumedSymbol}) = {resultSet}
-                          </p>
-                        </div>
-                      );
-                    })}
+                    {simulation.deltaStar
+                      .filter((_, index) => index <= Math.max(stepIndex, 0))
+                      .map((_, index) => {
+                        const isActive = index === stepIndex;
+                        return (
+                          <div
+                            key={`delta-star-${index}`}
+                            className={`rounded-lg border px-3 py-2 text-xs ${
+                              isActive ? "border-primary bg-primary/5" : "bg-card"
+                            }`}
+                          >
+                            <p className="font-mono text-foreground">
+                              {getDeltaStarLine(analysis, simulation, index)}
+                            </p>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </section>
@@ -305,22 +375,23 @@ export function StringSimulator({
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Trazas paso a paso
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Formato: (estado_actual, símbolo_leído, estado_siguiente).
-                  </p>
                 </div>
 
                 {simulation.acceptedPaths.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-green-700 dark:text-green-400">Trazas de aceptación</p>
-                    {simulation.acceptedPaths.map((path, index) => renderPathCard(path, "accepted", index))}
+                    {simulation.acceptedPaths.map((path, index) =>
+                      renderPathCard(path, "accepted", index, stepIndex, revealAllTraces),
+                    )}
                   </div>
                 )}
 
                 {simulation.rejectedPaths.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-destructive">Trazas de rechazo</p>
-                    {simulation.rejectedPaths.map((path, index) => renderPathCard(path, "rejected", index))}
+                    {simulation.rejectedPaths.map((path, index) =>
+                      renderPathCard(path, "rejected", index, stepIndex, revealAllTraces),
+                    )}
                   </div>
                 )}
               </section>
