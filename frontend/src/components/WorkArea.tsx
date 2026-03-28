@@ -209,8 +209,8 @@ export function WorkArea({
           onSelectNode(stateId);
         } else {
           const symbol = prompt("Símbolos de transición:");
-          if (symbol?.trim()) {
-            onAddTransition(transitionStart, stateId, symbol.trim());
+          if (symbol !== null) {
+            onAddTransition(transitionStart, stateId, symbol);
           }
           onTransitionStart(null);
           onSelectNode(null);

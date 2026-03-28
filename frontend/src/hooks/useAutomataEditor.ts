@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { EPSILON_SYMBOL, normalizeSymbol } from "@/lib/automata";
 
 export interface AutomataState {
   id: string;
@@ -26,10 +27,14 @@ export type EditorTool = "select" | "addState" | "addTransition" | "delete";
 
 /** Parse multi-symbol notation: "1+0", "1|0", "1,0" → ["1","0"] */
 export function parseSymbols(input: string): string[] {
+  if (input.trim().length === 0) {
+    return [EPSILON_SYMBOL];
+  }
+
   return input
     .split(/[+|,]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+    .map((s) => normalizeSymbol(s))
+    .filter((s) => s.length > 0 || s === EPSILON_SYMBOL);
 }
 
 const MAX_HISTORY = 80;
@@ -181,12 +186,14 @@ export function useAutomataEditor() {
       setDataWithHistory((prev) => {
         const newTransitions = [...prev.transitions];
         for (const symbol of symbols) {
-          const id = `t_${from}_${to}_${symbol}`;
+          const normalized = normalizeSymbol(symbol);
+          const symbolKey = normalized === EPSILON_SYMBOL ? "epsilon" : normalized;
+          const id = `t_${from}_${to}_${symbolKey}`;
           const exists = newTransitions.some(
-            (t) => t.from === from && t.to === to && t.symbol === symbol
+            (t) => t.from === from && t.to === to && normalizeSymbol(t.symbol) === normalized
           );
           if (!exists) {
-            newTransitions.push({ id, from, to, symbol });
+            newTransitions.push({ id, from, to, symbol: normalized });
           }
         }
         return { ...prev, transitions: newTransitions };
@@ -206,9 +213,11 @@ export function useAutomataEditor() {
         );
         // Add new
         for (const symbol of newSymbols) {
-          const id = `t_${from}_${to}_${symbol}`;
+          const normalized = normalizeSymbol(symbol);
+          const symbolKey = normalized === EPSILON_SYMBOL ? "epsilon" : normalized;
+          const id = `t_${from}_${to}_${symbolKey}`;
           if (!transitions.some((t) => t.id === id)) {
-            transitions.push({ id, from, to, symbol });
+            transitions.push({ id, from, to, symbol: normalized });
           }
         }
         return { ...prev, transitions };

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import type { AutomataState, AutomataTransition } from "@/hooks/useAutomataEditor";
+import { serializeSymbols } from "@/lib/automata";
 
 interface TransitionRendererProps {
   transitions: AutomataTransition[];
@@ -31,8 +32,8 @@ function EditableLabel({
 
   const commit = () => {
     setEditing(false);
-    if (value.trim() && value.trim() !== label) {
-      onCommit(value.trim());
+    if (value !== label) {
+      onCommit(value);
     } else {
       setValue(label);
     }
@@ -96,7 +97,7 @@ export function TransitionRenderer({ transitions, states, onEditTransition }: Tr
         const to = stateMap.get(toId);
         if (!from || !to) return null;
 
-        const label = symbols.join(", ");
+        const label = serializeSymbols(symbols);
 
         const handleEdit = (newInput: string) => {
           onEditTransition?.(fromId, toId, symbols, newInput);
