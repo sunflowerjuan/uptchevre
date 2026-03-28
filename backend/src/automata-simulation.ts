@@ -127,7 +127,7 @@ function enumeratePaths(
             toId: transition.to,
             toName: nameMap.get(transition.to) ?? transition.to,
             symbol: "",
-            displaySymbol: "ε",
+            displaySymbol: "\u03b5",
             consumedIndex: inputIndex,
           },
         ],

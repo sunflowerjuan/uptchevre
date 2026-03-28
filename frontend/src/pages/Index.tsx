@@ -45,6 +45,11 @@ const Index = () => {
     });
   }, [editor]);
 
+  const handleClearEditor = useCallback(() => {
+    editor.clearAll();
+    setHighlightedStates(new Set());
+  }, [editor]);
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <Header
@@ -94,7 +99,7 @@ const Index = () => {
             <EditorToolbar
               selectedTool={editor.selectedTool}
               onToolChange={editor.setSelectedTool}
-              onClear={editor.clearAll}
+              onClear={handleClearEditor}
             />
           </div>
 

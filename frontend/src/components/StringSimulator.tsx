@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Play, RotateCcw, SkipForward, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Play, RotateCcw, SkipForward, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
@@ -10,7 +10,7 @@ import type {
   SimulationPath,
 } from "@/lib/automata-api";
 import { simulateAutomatonRequest } from "@/lib/automata-api";
-import { displayWord } from "@/lib/automata";
+import { displayWord, getTheorySnapshot } from "@/lib/automata";
 
 interface StringSimulatorProps {
   data: AutomataData;
@@ -22,18 +22,42 @@ interface StringSimulatorProps {
 
 type SimStatus = "idle" | "running" | "accepted" | "rejected";
 
-function renderPath(path: SimulationPath) {
+function getTupleTrace(path: SimulationPath) {
   if (path.steps.length === 0) {
-    return path.stateNames.join(" -> ");
+    return [];
   }
 
-  const chunks = [path.stateNames[0] ?? "-"];
-  path.steps.forEach((step) => {
-    chunks.push(`--${step.displaySymbol}-->`);
-    chunks.push(step.toName);
-  });
+  return path.steps.map((step) => `(${step.fromName}, ${step.displaySymbol}, ${step.toName})`);
+}
 
-  return chunks.join(" ");
+function renderPathCard(path: SimulationPath, tone: "accepted" | "rejected", index: number) {
+  const tuples = getTupleTrace(path);
+  const toneClass =
+    tone === "accepted"
+      ? "border-green-500/20 bg-green-500/5"
+      : "border-destructive/20 bg-destructive/5";
+  const resultLabel =
+    tone === "accepted"
+      ? `Acepta en ${path.stateNames[path.stateNames.length - 1] ?? "-"}`
+      : `Rechaza en ${path.stateNames[path.stateNames.length - 1] ?? "-"}`;
+
+  return (
+    <div key={`${tone}-${index}`} className={`rounded-lg border px-3 py-2 text-xs ${toneClass}`}>
+      <p className="font-medium text-foreground">Traza {index + 1}</p>
+      {tuples.length > 0 ? (
+        <div className="mt-2 space-y-1 font-mono text-foreground">
+          {tuples.map((tuple, tupleIndex) => (
+            <p key={`${tone}-${index}-${tupleIndex}`}>{tuple}</p>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-muted-foreground">
+          Sin transición: inicia y termina en {path.stateNames[0] ?? "-"}.
+        </p>
+      )}
+      <p className="mt-2 text-muted-foreground">{resultLabel}</p>
+    </div>
+  );
 }
 
 export function StringSimulator({
@@ -47,7 +71,9 @@ export function StringSimulator({
   const [stepIndex, setStepIndex] = useState(-1);
   const [status, setStatus] = useState<SimStatus>("idle");
   const [simulation, setSimulation] = useState<AutomataSimulationResult | null>(null);
+  const [showDeltaStar, setShowDeltaStar] = useState(false);
 
+  const theoryKey = useMemo(() => JSON.stringify(getTheorySnapshot(data)), [data]);
   const simulationMutation = useMutation({
     mutationFn: (word: string) => simulateAutomatonRequest(data, word),
   });
@@ -75,8 +101,17 @@ export function StringSimulator({
     setSimulation(null);
     setStepIndex(-1);
     setStatus("idle");
+    setShowDeltaStar(false);
     onHighlight(new Set());
   }, [onHighlight]);
+
+  useEffect(() => {
+    setSimulation(null);
+    setStepIndex(-1);
+    setStatus("idle");
+    setShowDeltaStar(false);
+    onHighlight(new Set());
+  }, [onHighlight, theoryKey]);
 
   const commitResult = useCallback(
     (result: AutomataSimulationResult, nextStepIndex: number, nextStatus: SimStatus) => {
@@ -117,11 +152,11 @@ export function StringSimulator({
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">Simulacion</h3>
+        <h3 className="text-sm font-semibold text-foreground">Simulación</h3>
         <p className="text-xs text-muted-foreground">
           {analysis?.automatonType
-            ? `Tipo detectado: ${analysis.automatonType}`
-            : "Conecta el backend para calcular delta* y las trazas del automata."}
+            ? `Tipo detectado: ${analysis.automatonType === "NFA_EPSILON" ? "NFA-ε" : analysis.automatonType}`
+            : "Simula palabras y recorre sus trazas paso a paso."}
         </p>
       </div>
 
@@ -130,12 +165,12 @@ export function StringSimulator({
       )}
 
       {hasStates && analysisLoading && (
-        <p className="text-xs text-muted-foreground">Analizando el automata...</p>
+        <p className="text-xs text-muted-foreground">Analizando el autómata...</p>
       )}
 
       {hasStates && analysisError && (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          No se pudo obtener el analisis del automata desde el backend.
+          No se pudo obtener el análisis del autómata.
         </div>
       )}
 
@@ -147,7 +182,7 @@ export function StringSimulator({
 
       {hasStates && !analysisLoading && !hasAccept && (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          No hay estados de aceptacion. Doble clic en un estado para marcarlo como final.
+          No hay estados de aceptación. Doble clic en un estado para marcarlo como final.
         </div>
       )}
 
@@ -161,7 +196,7 @@ export function StringSimulator({
                 setInput(event.target.value);
                 reset();
               }}
-              className="font-mono text-sm h-9"
+              className="h-9 font-mono text-sm"
             />
           </div>
 
@@ -211,71 +246,81 @@ export function StringSimulator({
           {simulation && (
             <>
               <section className="space-y-2 rounded-lg border p-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Trazas delta*
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Cada paso muestra los estados alcanzables y el cierre usado por la simulacion.
-                  </p>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Función de transición extendida
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Muestra {`\u03b4*`} carácter a carácter para la palabra actual.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => setShowDeltaStar((current) => !current)}
+                  >
+                    {showDeltaStar ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {showDeltaStar ? "Ocultar δ*" : "Mostrar δ*"}
+                  </Button>
                 </div>
 
-                <div className="space-y-2">
-                  {simulation.deltaStar.map((trace) => {
-                    const isActive = trace.index === stepIndex;
-                    return (
-                      <div
-                        key={`${trace.index}-${trace.prefix}`}
-                        className={`rounded-lg border px-3 py-2 text-xs ${
-                          isActive ? "border-primary bg-primary/5" : "bg-card"
-                        }`}
-                      >
-                        <p className="font-mono text-foreground">
-                          {trace.index === 0
-                            ? `delta*({${trace.reachableStateNames.join(", ")}}, epsilon)`
-                            : `delta*({${simulation.deltaStar[trace.index - 1]?.closureStateNames.join(", ")}}, ${trace.displayConsumedSymbol})`}
-                        </p>
-                        <p className="mt-1 text-muted-foreground">
-                          Reachable: {trace.reachableStateNames.length > 0 ? `{${trace.reachableStateNames.join(", ")}}` : "{}"}
-                        </p>
-                        <p className="text-muted-foreground">
-                          Closure: {trace.closureStateNames.length > 0 ? `{${trace.closureStateNames.join(", ")}}` : "{}"}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+                {showDeltaStar && (
+                  <div className="space-y-2">
+                    {simulation.deltaStar.map((trace) => {
+                      const isActive = trace.index === stepIndex;
+                      const leftOperand =
+                        trace.index === 0
+                          ? analysis?.automatonType === "DFA"
+                            ? analysis.initialStates[0]?.name ?? "q\u2080"
+                            : `{${analysis?.initialStates.map((state) => state.name).join(", ") ?? ""}}`
+                          : `{${simulation.deltaStar[trace.index - 1]?.closureStateNames.join(", ")}}`;
+                      const consumedSymbol = trace.index === 0 ? "\u03b5" : trace.displayConsumedSymbol;
+                      const resultSet =
+                        trace.closureStateNames.length > 0
+                          ? `{${trace.closureStateNames.join(", ")}}`
+                          : "\u2205";
+
+                      return (
+                        <div
+                          key={`${trace.index}-${trace.prefix}`}
+                          className={`rounded-lg border px-3 py-2 text-xs ${
+                            isActive ? "border-primary bg-primary/5" : "bg-card"
+                          }`}
+                        >
+                          <p className="font-mono text-foreground">
+                            {`\u03b4*`}({leftOperand}, {consumedSymbol}) = {resultSet}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
 
               <section className="space-y-2 rounded-lg border p-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Caminos de aceptacion y rechazo
+                    Trazas paso a paso
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    El backend explora rutas posibles y resume trazas para palabras validas e invalidas.
+                    Formato: (estado_actual, símbolo_leído, estado_siguiente).
                   </p>
                 </div>
 
                 {simulation.acceptedPaths.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-green-700 dark:text-green-400">Aceptados</p>
-                    {simulation.acceptedPaths.map((path, index) => (
-                      <div key={`accepted-${index}`} className="rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs">
-                        <p className="font-mono text-foreground">{renderPath(path)}</p>
-                      </div>
-                    ))}
+                    <p className="text-xs font-medium text-green-700 dark:text-green-400">Trazas de aceptación</p>
+                    {simulation.acceptedPaths.map((path, index) => renderPathCard(path, "accepted", index))}
                   </div>
                 )}
 
                 {simulation.rejectedPaths.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-destructive">Rechazados</p>
-                    {simulation.rejectedPaths.map((path, index) => (
-                      <div key={`rejected-${index}`} className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs">
-                        <p className="font-mono text-foreground">{renderPath(path)}</p>
-                      </div>
-                    ))}
+                    <p className="text-xs font-medium text-destructive">Trazas de rechazo</p>
+                    {simulation.rejectedPaths.map((path, index) => renderPathCard(path, "rejected", index))}
                   </div>
                 )}
               </section>
@@ -284,7 +329,7 @@ export function StringSimulator({
                 <p>
                   Estados activos resaltados:{" "}
                   <span className="font-mono text-foreground">
-                    {highlightedIds.length > 0 ? `{${activeStep?.closureStateNames.join(", ")}}` : "{}"}
+                    {highlightedIds.length > 0 ? `{${activeStep?.closureStateNames.join(", ")}}` : "\u2205"}
                   </span>
                 </p>
               </section>
