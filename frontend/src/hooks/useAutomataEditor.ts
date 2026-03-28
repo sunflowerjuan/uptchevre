@@ -251,6 +251,27 @@ export function useAutomataEditor() {
     setTransitionStart(null);
   }, [setDataWithHistory]);
 
+  const loadAutomaton = useCallback(
+    (nextData: AutomataData) => {
+      setDataWithHistory({
+        states: nextData.states.map((state) => ({ ...state })),
+        transitions: nextData.transitions.map((transition) => ({ ...transition })),
+        alphabet: [...nextData.alphabet],
+      });
+
+      const nextCounter = nextData.states.reduce((maxCounter, state) => {
+        const match = /^q(\d+)$/.exec(state.id);
+        if (!match) return maxCounter;
+        return Math.max(maxCounter, Number(match[1]) + 1);
+      }, 0);
+
+      setStateCounter(nextCounter);
+      setSelectedNode(null);
+      setTransitionStart(null);
+    },
+    [setDataWithHistory]
+  );
+
   return {
     data,
     selectedTool,
@@ -270,6 +291,7 @@ export function useAutomataEditor() {
     deleteState,
     deleteTransition,
     clearAll,
+    loadAutomaton,
     undo,
     redo,
     canUndo: historyRef.current.length > 0,
