@@ -16,12 +16,18 @@ import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import type { AutomataWorkspaceDocument } from "@/lib/automata-workspace";
+
+export type FormalismExportSection =
+  | "full"
+  | "tuple"
+  | "matrix"
+  | "transition"
+  | "closure";
 
 interface ImportExportPanelProps {
   documentName: string;
@@ -31,16 +37,16 @@ interface ImportExportPanelProps {
   onExportDiagramPng: (fileName: string) => void;
   onCopyDiagram: () => void;
   onExportFormalismMarkdown: (fileName: string) => void;
-  onExportFormalismImage: (fileName: string) => void;
-  onCopyFormalism: () => void;
+  onExportFormalismImage: (fileName: string, section: FormalismExportSection) => void;
+  onCopyFormalism: (section: FormalismExportSection) => void;
   onExportSimulationMarkdown: (fileName: string) => void;
-  onExportSimulationImage: (fileName: string) => void;
-  onCopySimulation: () => void;
+  onExportSimulationPdf: (fileName: string) => void;
   recentDocuments: AutomataWorkspaceDocument[];
   onOpenRecent: (document: AutomataWorkspaceDocument) => void;
   canExportDiagram: boolean;
   canExportFormalism: boolean;
   canExportSimulation: boolean;
+  supportsEpsilon?: boolean;
 }
 
 function formatRecentDate(value: string) {
@@ -61,16 +67,17 @@ export function ImportExportPanel({
   onExportFormalismImage,
   onCopyFormalism,
   onExportSimulationMarkdown,
-  onExportSimulationImage,
-  onCopySimulation,
+  onExportSimulationPdf,
   recentDocuments,
   onOpenRecent,
   canExportDiagram,
   canExportFormalism,
   canExportSimulation,
+  supportsEpsilon = false,
 }: ImportExportPanelProps) {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [exportFileName, setExportFileName] = useState(documentName || "A");
+  const [formalismSection, setFormalismSection] = useState<FormalismExportSection>("full");
 
   useEffect(() => {
     setExportFileName(documentName || "A");
@@ -91,20 +98,12 @@ export function ImportExportPanel({
         <SheetContent side="right" className="w-full p-0 sm:max-w-xl">
           <SheetHeader className="border-b px-6 py-5">
             <SheetTitle>Exportar e importar</SheetTitle>
-            <SheetDescription>
-              Descarga el automata, sus vistas derivadas o recupera un archivo `.jkaut`.
-            </SheetDescription>
           </SheetHeader>
 
           <div className="h-[calc(100vh-88px)] overflow-y-auto px-6 py-5">
             <div className="space-y-5">
               <section className="space-y-3 rounded-xl border bg-card p-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">Archivo</p>
-                  <p className="text-xs text-muted-foreground">
-                    El nombre del archivo es independiente del nombre del automata actual.
-                  </p>
-                </div>
+                <p className="text-sm font-semibold text-foreground">Archivo</p>
 
                 <Input
                   value={exportFileName}
@@ -195,8 +194,29 @@ export function ImportExportPanel({
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">Formalismo</p>
                   <p className="text-xs text-muted-foreground">
-                    Descarga el formalismo como imagen o como Markdown.
+                    Selecciona la parte que quieres exportar como imagen.
                   </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "full", label: "Completo" },
+                    { id: "tuple", label: "5-tupla" },
+                    { id: "matrix", label: "Matriz" },
+                    { id: "transition", label: "δ" },
+                    { id: "closure", label: "Clausura-ε", disabled: !supportsEpsilon },
+                  ].map((option) => (
+                    <Button
+                      key={option.id}
+                      type="button"
+                      variant={formalismSection === option.id ? "default" : "outline"}
+                      className="justify-start"
+                      disabled={option.disabled}
+                      onClick={() => setFormalismSection(option.id as FormalismExportSection)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
@@ -204,7 +224,7 @@ export function ImportExportPanel({
                     type="button"
                     variant="outline"
                     className="justify-start gap-2"
-                    onClick={() => onExportFormalismImage(effectiveFileName)}
+                    onClick={() => onExportFormalismImage(effectiveFileName, formalismSection)}
                     disabled={!canExportFormalism}
                   >
                     <FileImage className="h-4 w-4" />
@@ -214,7 +234,7 @@ export function ImportExportPanel({
                     type="button"
                     variant="outline"
                     className="justify-start gap-2"
-                    onClick={onCopyFormalism}
+                    onClick={() => onCopyFormalism(formalismSection)}
                     disabled={!canExportFormalism}
                   >
                     <Clipboard className="h-4 w-4" />
@@ -237,30 +257,20 @@ export function ImportExportPanel({
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">Simulación</p>
                   <p className="text-xs text-muted-foreground">
-                    Exporta la ultima simulacion disponible como imagen o documento.
+                    Exporta la ultima simulación disponible como PDF o Markdown.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     className="justify-start gap-2"
-                    onClick={() => onExportSimulationImage(effectiveFileName)}
+                    onClick={() => onExportSimulationPdf(effectiveFileName)}
                     disabled={!canExportSimulation}
                   >
-                    <FileImage className="h-4 w-4" />
-                    PNG
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="justify-start gap-2"
-                    onClick={onCopySimulation}
-                    disabled={!canExportSimulation}
-                  >
-                    <Clipboard className="h-4 w-4" />
-                    Copiar
+                    <Download className="h-4 w-4" />
+                    PDF
                   </Button>
                   <Button
                     type="button"
@@ -269,45 +279,45 @@ export function ImportExportPanel({
                     onClick={() => onExportSimulationMarkdown(effectiveFileName)}
                     disabled={!canExportSimulation}
                   >
-                    <Download className="h-4 w-4" />
+                    <Sigma className="h-4 w-4" />
                     Markdown
                   </Button>
                 </div>
+              </section>
+
+              <section className="space-y-3 rounded-xl border bg-card p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <History className="h-4 w-4" />
+                  Recientes
+                </div>
+
+                {recentDocuments.length > 0 ? (
+                  <div className="space-y-2">
+                    {recentDocuments.map((document) => (
+                      <button
+                        key={document.id}
+                        type="button"
+                        className="w-full rounded-lg border bg-card px-3 py-2 text-left transition-colors hover:bg-accent"
+                        onClick={() => onOpenRecent(document)}
+                      >
+                        <p className="truncate text-xs font-medium text-foreground">{document.name}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {document.automaton.states.length} estados · {document.automaton.transitions.length} transiciones
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {formatRecentDate(document.updatedAt)}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">SIN RECIENTES</p>
+                )}
               </section>
             </div>
           </div>
         </SheetContent>
       </Sheet>
-
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <History className="h-3.5 w-3.5" />
-          Recientes
-        </div>
-
-        {recentDocuments.length > 0 ? (
-          <div className="space-y-2">
-            {recentDocuments.map((document) => (
-              <button
-                key={document.id}
-                type="button"
-                className="w-full rounded-lg border bg-card px-3 py-2 text-left transition-colors hover:bg-accent"
-                onClick={() => onOpenRecent(document)}
-              >
-                <p className="truncate text-xs font-medium text-foreground">{document.name}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {document.automaton.states.length} estados · {document.automaton.transitions.length} transiciones
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {formatRecentDate(document.updatedAt)}
-                </p>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">SIN RECIENTES</p>
-        )}
-      </div>
     </div>
   );
 }

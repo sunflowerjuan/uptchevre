@@ -14,6 +14,11 @@ import type { AutomataAnalysisResult } from "@/lib/automata-api";
  */
 interface FormalismPanelProps {
   automatonName?: string;
+  rootId?: string;
+  tupleSectionId?: string;
+  matrixSectionId?: string;
+  transitionSectionId?: string;
+  closureSectionId?: string;
   hasStates: boolean;
   analysis?: AutomataAnalysisResult;
   isLoading: boolean;
@@ -74,6 +79,11 @@ function getTransitionDefinitions(
 
 export function FormalismPanel({
   automatonName = "A",
+  rootId,
+  tupleSectionId,
+  matrixSectionId,
+  transitionSectionId,
+  closureSectionId,
   hasStates,
   analysis,
   isLoading,
@@ -125,8 +135,8 @@ export function FormalismPanel({
 
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-5 p-4">
-        <section className="space-y-3 rounded-lg border bg-card p-3">
+      <div id={rootId} className="space-y-5 p-4">
+        <section id={tupleSectionId} className="space-y-3 rounded-lg border bg-card p-3">
           <div className="space-y-1">
             <p className="text-sm font-semibold text-foreground">
               {getTupleLabel(analysis.automatonType)}
@@ -168,7 +178,7 @@ export function FormalismPanel({
           </div>
         </section>
 
-        <section className="space-y-3 rounded-lg border bg-card p-3">
+        <section id={matrixSectionId} className="space-y-3 rounded-lg border bg-card p-3">
           <div className="space-y-1">
             <p className="text-sm font-semibold text-foreground">Matriz de transición</p>
             <p className="font-mono text-xs text-muted-foreground">
@@ -217,7 +227,7 @@ export function FormalismPanel({
           )}
         </section>
 
-        <section className="space-y-3 rounded-lg border bg-card p-3">
+        <section id={transitionSectionId} className="space-y-3 rounded-lg border bg-card p-3">
           <div className="space-y-1">
             <p className="text-sm font-semibold text-foreground">Función de transición</p>
             <p className="font-mono text-xs text-muted-foreground">
@@ -243,7 +253,7 @@ export function FormalismPanel({
         </section>
 
         {analysis.supportsEpsilon && (
-          <section className="space-y-3 rounded-lg border bg-card p-3">
+          <section id={closureSectionId} className="space-y-3 rounded-lg border bg-card p-3">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-foreground">Clausura-{EPSILON_DISPLAY}</p>
               <p className="font-mono text-xs text-muted-foreground">

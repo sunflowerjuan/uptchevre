@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { useAutomataEditor } from "@/hooks/useAutomataEditor";
 import { ImportExportPanel } from "@/components/ImportExportPanel";
+import type { FormalismExportSection } from "@/components/ImportExportPanel";
 import { WorkArea } from "@/components/WorkArea";
 import { FormalismPanel } from "@/components/FormalismPanel";
 import { StringSimulator } from "@/components/StringSimulator";
@@ -16,6 +17,7 @@ import type { AutomataSimulationResult } from "@/lib/automata-api";
 import {
   copyElementImageToClipboard,
   exportElementAsPng,
+  exportElementAsPdf,
   exportFormalismAsMarkdown,
   exportSimulationAsMarkdown,
   exportSvgElementAsSvg,
@@ -36,6 +38,10 @@ const Index = () => {
   const workAreaContainerId = "uptchevere-workarea";
   const workAreaSvgId = "uptchevere-workarea-svg";
   const formalismExportId = "uptchevere-formalism-export";
+  const formalismTupleExportId = "uptchevere-formalism-tuple";
+  const formalismMatrixExportId = "uptchevere-formalism-matrix";
+  const formalismTransitionExportId = "uptchevere-formalism-transition";
+  const formalismClosureExportId = "uptchevere-formalism-closure";
   const simulationExportId = "uptchevere-simulation-export";
 
   const analysisQuery = useQuery({
@@ -140,6 +146,14 @@ const Index = () => {
     return element;
   }, []);
 
+  const getFormalismElementId = useCallback((section: FormalismExportSection) => {
+    if (section === "tuple") return formalismTupleExportId;
+    if (section === "matrix") return formalismMatrixExportId;
+    if (section === "transition") return formalismTransitionExportId;
+    if (section === "closure") return formalismClosureExportId;
+    return formalismExportId;
+  }, []);
+
   const handleExportDiagramSvg = useCallback((fileName: string) => {
     try {
       exportSvgElementAsSvg(getSvgElement(), fileName);
@@ -199,11 +213,14 @@ const Index = () => {
     });
   }, [analysisQuery.data, editor.currentDocument]);
 
-  const handleExportFormalismImage = useCallback(async (fileName: string) => {
+  const handleExportFormalismImage = useCallback(async (fileName: string, section: FormalismExportSection) => {
     try {
       await exportElementAsPng(
-        getHtmlElement(formalismExportId, "No se encontro la vista de formalismo."),
-        `${fileName}-formalismo`,
+        getHtmlElement(
+          getFormalismElementId(section),
+          "No se encontro la sección seleccionada del formalismo.",
+        ),
+        `${fileName}-formalismo-${section}`,
       );
       toast({
         title: "Formalismo exportado",
@@ -216,12 +233,15 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  }, [getHtmlElement]);
+  }, [getFormalismElementId, getHtmlElement]);
 
-  const handleCopyFormalism = useCallback(async () => {
+  const handleCopyFormalism = useCallback(async (section: FormalismExportSection) => {
     try {
       await copyElementImageToClipboard(
-        getHtmlElement(formalismExportId, "No se encontro la vista de formalismo."),
+        getHtmlElement(
+          getFormalismElementId(section),
+          "No se encontro la sección seleccionada del formalismo.",
+        ),
       );
       toast({
         title: "Formalismo copiado",
@@ -234,7 +254,7 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  }, [getHtmlElement]);
+  }, [getFormalismElementId, getHtmlElement]);
 
   const handleExportSimulationMarkdown = useCallback((fileName: string) => {
     if (!analysisQuery.data || !lastSimulation) return;
@@ -245,38 +265,20 @@ const Index = () => {
     });
   }, [analysisQuery.data, editor.currentDocument, lastSimulation]);
 
-  const handleExportSimulationImage = useCallback(async (fileName: string) => {
+  const handleExportSimulationPdf = useCallback(async (fileName: string) => {
     try {
-      await exportElementAsPng(
+      await exportElementAsPdf(
         getHtmlElement(simulationExportId, "No se encontro la vista de simulacion."),
         `${fileName}-simulacion`,
       );
       toast({
         title: "Simulacion exportada",
-        description: "La simulacion se descargo como PNG.",
+        description: "La simulacion se descargo como PDF.",
       });
     } catch (error) {
       toast({
         title: "No se pudo exportar",
         description: error instanceof Error ? error.message : "No fue posible exportar la simulacion.",
-        variant: "destructive",
-      });
-    }
-  }, [getHtmlElement]);
-
-  const handleCopySimulation = useCallback(async () => {
-    try {
-      await copyElementImageToClipboard(
-        getHtmlElement(simulationExportId, "No se encontro la vista de simulacion."),
-      );
-      toast({
-        title: "Simulacion copiada",
-        description: "La simulacion se copio al portapapeles como imagen.",
-      });
-    } catch (error) {
-      toast({
-        title: "No se pudo copiar",
-        description: error instanceof Error ? error.message : "No fue posible copiar la simulacion.",
         variant: "destructive",
       });
     }
@@ -314,11 +316,10 @@ const Index = () => {
               onExportDiagramPng={(fileName) => void handleExportDiagramPng(fileName)}
               onCopyDiagram={() => void handleCopyDiagram()}
               onExportFormalismMarkdown={handleExportFormalismMarkdown}
-              onExportFormalismImage={(fileName) => void handleExportFormalismImage(fileName)}
-              onCopyFormalism={() => void handleCopyFormalism()}
+              onExportFormalismImage={(fileName, section) => void handleExportFormalismImage(fileName, section)}
+              onCopyFormalism={(section) => void handleCopyFormalism(section)}
               onExportSimulationMarkdown={handleExportSimulationMarkdown}
-              onExportSimulationImage={(fileName) => void handleExportSimulationImage(fileName)}
-              onCopySimulation={() => void handleCopySimulation()}
+              onExportSimulationPdf={(fileName) => void handleExportSimulationPdf(fileName)}
               recentDocuments={editor.recentDocuments}
               onOpenRecent={handleOpenRecent}
               canExportDiagram={editor.data.states.length > 0}
@@ -333,6 +334,7 @@ const Index = () => {
                   showSimulator &&
                   (activeModule === "both" || activeModule === "simulator"),
               )}
+              supportsEpsilon={Boolean(analysisQuery.data?.supportsEpsilon)}
             />
           }
         />
@@ -385,6 +387,11 @@ const Index = () => {
               <div id={formalismExportId} className="border-t">
                 <FormalismPanel
                   automatonName={editor.documentName}
+                  rootId={formalismExportId}
+                  tupleSectionId={formalismTupleExportId}
+                  matrixSectionId={formalismMatrixExportId}
+                  transitionSectionId={formalismTransitionExportId}
+                  closureSectionId={formalismClosureExportId}
                   hasStates={editor.data.states.length > 0}
                   analysis={analysisQuery.data}
                   isLoading={analysisQuery.isLoading}
