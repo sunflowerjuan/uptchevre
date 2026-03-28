@@ -1,3 +1,4 @@
+import { toBlob, toPng } from "html-to-image";
 import type { AutomataWorkspaceDocument } from "@/lib/automata-workspace";
 import { createJkautFile } from "@/lib/automata-workspace";
 import type { AutomataAnalysisResult, AutomataSimulationResult } from "@/lib/automata-api";
@@ -23,6 +24,10 @@ function downloadBlob(blob: Blob, fileName: string) {
 
 function downloadText(content: string, fileName: string, contentType = "text/plain;charset=utf-8") {
   downloadBlob(new Blob([content], { type: contentType }), fileName);
+}
+
+function getFileBaseName(fileName: string) {
+  return sanitizeFileName(fileName);
 }
 
 function inlineComputedStyles(source: SVGElement, target: SVGElement) {
@@ -96,13 +101,25 @@ function getTransitionSymbols(analysis: AutomataAnalysisResult) {
     : analysis.alphabet;
 }
 
-export function exportWorkspaceAsJkaut(document: AutomataWorkspaceDocument) {
+export function exportWorkspaceAsJkaut(document: AutomataWorkspaceDocument, fileName: string) {
   const file = createJkautFile(document);
   downloadText(
     JSON.stringify(file, null, 2),
-    `${sanitizeFileName(document.name)}.jkaut`,
+    `${getFileBaseName(fileName)}.jkaut`,
     "application/json;charset=utf-8",
   );
+}
+
+export function exportSvgElementAsSvg(svgElement: SVGSVGElement, fileName: string) {
+  const clonedSvg = svgElement.cloneNode(true);
+  if (!(clonedSvg instanceof SVGSVGElement)) {
+    throw new Error("No fue posible clonar el diagrama.");
+  }
+
+  inlineComputedStyles(svgElement, clonedSvg);
+  clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const serializedSvg = new XMLSerializer().serializeToString(clonedSvg);
+  downloadText(serializedSvg, `${getFileBaseName(fileName)}-diagrama.svg`, "image/svg+xml;charset=utf-8");
 }
 
 export async function exportSvgElementAsPng(svgElement: SVGSVGElement, fileBaseName: string) {
@@ -148,16 +165,57 @@ export async function exportSvgElementAsPng(svgElement: SVGSVGElement, fileBaseN
     const dataUrl = canvas.toDataURL("image/png");
     const link = document.createElement("a");
     link.href = dataUrl;
-    link.download = `${sanitizeFileName(fileBaseName)}-diagrama.png`;
+    link.download = `${getFileBaseName(fileBaseName)}-diagrama.png`;
     link.click();
   } finally {
     URL.revokeObjectURL(svgUrl);
   }
 }
 
+async function getClipboardImageBlob(element: HTMLElement) {
+  const blob = await toBlob(element, {
+    cacheBust: true,
+    pixelRatio: 2,
+    backgroundColor: getComputedStyle(document.body).backgroundColor,
+  });
+
+  if (!blob) {
+    throw new Error("No fue posible construir la imagen para el portapapeles.");
+  }
+
+  return blob;
+}
+
+export async function exportElementAsPng(element: HTMLElement, fileName: string) {
+  const dataUrl = await toPng(element, {
+    cacheBust: true,
+    pixelRatio: 2,
+    backgroundColor: getComputedStyle(document.body).backgroundColor,
+  });
+
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = `${getFileBaseName(fileName)}.png`;
+  link.click();
+}
+
+export async function copyElementImageToClipboard(element: HTMLElement) {
+  if (!("clipboard" in navigator) || typeof ClipboardItem === "undefined") {
+    throw new Error("El navegador no soporta copiar imagenes al portapapeles.");
+  }
+
+  const blob = await getClipboardImageBlob(element);
+  await navigator.clipboard.write([
+    new ClipboardItem({
+      [blob.type]: blob,
+    }),
+  ]);
+}
+
 export function exportFormalismAsMarkdown(
   document: AutomataWorkspaceDocument,
   analysis: AutomataAnalysisResult,
+  fileName: string,
 ) {
   const groupedTransitions = buildGroupedTransitions(analysis);
   const transitionSymbols = getTransitionSymbols(analysis);
@@ -229,13 +287,18 @@ export function exportFormalismAsMarkdown(
     );
   }
 
-  downloadText(content.join("\n"), `${sanitizeFileName(document.name)}-formalismo.md`, "text/markdown;charset=utf-8");
+  downloadText(
+    content.join("\n"),
+    `${getFileBaseName(fileName)}-formalismo.md`,
+    "text/markdown;charset=utf-8",
+  );
 }
 
 export function exportSimulationAsMarkdown(
   document: AutomataWorkspaceDocument,
   analysis: AutomataAnalysisResult,
   simulation: AutomataSimulationResult,
+  fileName: string,
 ) {
   const lastStep = simulation.deltaStar[simulation.deltaStar.length - 1];
   const finalResult =
@@ -292,5 +355,9 @@ export function exportSimulationAsMarkdown(
     ...pathLines(simulation.rejectedPaths, "Trazas de rechazo"),
   ];
 
-  downloadText(content.join("\n"), `${sanitizeFileName(document.name)}-simulacion.md`, "text/markdown;charset=utf-8");
+  downloadText(
+    content.join("\n"),
+    `${getFileBaseName(fileName)}-simulacion.md`,
+    "text/markdown;charset=utf-8",
+  );
 }

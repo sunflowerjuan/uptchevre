@@ -6,6 +6,7 @@ import { Plus, Minus, RotateCcw } from "lucide-react";
 import type { EditorTool, AutomataData } from "@/hooks/useAutomataEditor";
 
 interface WorkAreaProps {
+  containerId?: string;
   svgId?: string;
   data: AutomataData;
   selectedTool: EditorTool;
@@ -31,6 +32,7 @@ interface WorkAreaProps {
 }
 
 export function WorkArea({
+  containerId,
   svgId,
   data,
   selectedTool,
@@ -234,7 +236,10 @@ export function WorkArea({
   const zoomPercentage = Math.round(scale * 100);
 
   return (
-    <div className="relative flex-1 overflow-hidden rounded-lg border bg-canvas canvas-grid">
+    <div
+      id={containerId}
+      className="relative flex-1 overflow-hidden rounded-lg border bg-canvas canvas-grid"
+    >
       {/* Mini Figma Panel */}
       <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3 bg-card/80 backdrop-blur-md border rounded-xl px-4 py-2 shadow-lg">
         <Button
