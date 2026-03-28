@@ -3,16 +3,17 @@ import { EPSILON_DISPLAY } from "@/lib/automata";
 import type { AutomataAnalysisResult } from "@/lib/automata-api";
 
 /**
- * Presentación visual del formalismo.
+ * Presentacion visual del formalismo.
  *
- * Este componente muestra en pantalla la interpretación matematica del
- * autómata ya analizado:
+ * Este componente muestra en pantalla la interpretacion matematica del
+ * automata ya analizado:
  * - 5-tupla
- * - matriz de transición
- * - definiciones explícitas de FT
+ * - matriz de transicion
+ * - definiciones explicitas de FT
  * - clausura-e por estado cuando aplica
  */
 interface FormalismPanelProps {
+  automatonName?: string;
   hasStates: boolean;
   analysis?: AutomataAnalysisResult;
   isLoading: boolean;
@@ -29,9 +30,9 @@ function getTupleLabel(type: AutomataAnalysisResult["automatonType"]) {
 }
 
 function getTransitionFormula(type: AutomataAnalysisResult["automatonType"]) {
-  if (type === "DFA") return `${DELTA}: Q \u00d7 ${SIGMA} \u2192 Q`;
-  if (type === "NFA") return `${DELTA}: Q \u00d7 ${SIGMA} \u2192 2^Q`;
-  return `${DELTA}: Q \u00d7 (${SIGMA} \u222a {${EPSILON_DISPLAY}}) \u2192 2^Q`;
+  if (type === "DFA") return `${DELTA}: Q × ${SIGMA} → Q`;
+  if (type === "NFA") return `${DELTA}: Q × ${SIGMA} → 2^Q`;
+  return `${DELTA}: Q × (${SIGMA} ∪ {${EPSILON_DISPLAY}}) → 2^Q`;
 }
 
 function getGroupedTransitions(analysis: AutomataAnalysisResult) {
@@ -58,7 +59,6 @@ function getTransitionDefinitions(
   transitionSymbols: string[],
   groupedTransitions: Map<string, string[]>,
 ) {
-  // Convierte la matriz en definiciones puntuales del tipo δ(q, a) = ...
   return analysis.states.flatMap((state) =>
     transitionSymbols.map((symbol) => ({
       key: `${state.id}-${symbol}`,
@@ -73,6 +73,7 @@ function getTransitionDefinitions(
 }
 
 export function FormalismPanel({
+  automatonName = "A",
   hasStates,
   analysis,
   isLoading,
@@ -127,8 +128,12 @@ export function FormalismPanel({
       <div className="space-y-5 p-4">
         <section className="space-y-3 rounded-lg border bg-card p-3">
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">{getTupleLabel(analysis.automatonType)}</p>
-            <p className="font-mono text-sm text-foreground">A = (Q, {SIGMA}, {DELTA}, q₀, F)</p>
+            <p className="text-sm font-semibold text-foreground">
+              {getTupleLabel(analysis.automatonType)}
+            </p>
+            <p className="font-mono text-sm text-foreground">
+              {automatonName} = (Q, {SIGMA}, {DELTA}, q₀, F)
+            </p>
           </div>
 
           <div className="space-y-2 text-xs">
@@ -188,7 +193,7 @@ export function FormalismPanel({
                   {analysis.states.map((state) => (
                     <tr key={state.id} className="border-b last:border-0">
                       <td className="px-3 py-2 font-mono font-medium">
-                        {state.isInitial ? "\u2192" : ""}
+                        {state.isInitial ? "→" : ""}
                         {state.isAccept ? "*" : ""}
                         {state.name}
                       </td>
@@ -242,7 +247,7 @@ export function FormalismPanel({
             <div className="space-y-1">
               <p className="text-sm font-semibold text-foreground">Clausura-{EPSILON_DISPLAY}</p>
               <p className="font-mono text-xs text-muted-foreground">
-                Clausura-{EPSILON_DISPLAY}(q) = {"{"}p {"|"} q {"\u21dd"} p usando {EPSILON_DISPLAY}{"}"}
+                Clausura-{EPSILON_DISPLAY}(q) = {"{"}p {"|"} q {"⇝"} p usando {EPSILON_DISPLAY}{"}"}
               </p>
             </div>
 

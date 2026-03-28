@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, FileCode2, PlayCircle, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { ReactNode } from "react";
 
 export type SidebarModule = "simulator" | "formalism" | "both";
 
@@ -8,6 +9,7 @@ interface SidebarProps {
   activeModule: SidebarModule;
   onToggle: () => void;
   onSelectModule: (module: SidebarModule) => void;
+  footer?: ReactNode;
 }
 
 const modules: { id: SidebarModule; label: string; icon: React.ElementType }[] = [
@@ -16,7 +18,13 @@ const modules: { id: SidebarModule; label: string; icon: React.ElementType }[] =
   { id: "formalism", label: "Formalismo", icon: Table2 },
 ];
 
-export function Sidebar({ collapsed, activeModule, onToggle, onSelectModule }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  activeModule,
+  onToggle,
+  onSelectModule,
+  footer,
+}: SidebarProps) {
   return (
     <aside
       className={`border-r bg-card transition-all duration-200 ${
@@ -57,6 +65,8 @@ export function Sidebar({ collapsed, activeModule, onToggle, onSelectModule }: S
             );
           })}
         </nav>
+
+        {!collapsed && footer}
       </div>
     </aside>
   );

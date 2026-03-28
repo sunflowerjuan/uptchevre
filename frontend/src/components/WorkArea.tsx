@@ -6,6 +6,7 @@ import { Plus, Minus, RotateCcw } from "lucide-react";
 import type { EditorTool, AutomataData } from "@/hooks/useAutomataEditor";
 
 interface WorkAreaProps {
+  svgId?: string;
   data: AutomataData;
   selectedTool: EditorTool;
   selectedNode: string | null;
@@ -30,6 +31,7 @@ interface WorkAreaProps {
 }
 
 export function WorkArea({
+  svgId,
   data,
   selectedTool,
   selectedNode,
@@ -268,6 +270,7 @@ export function WorkArea({
       </div>
 
       <svg
+        id={svgId}
         ref={svgRef}
         className="h-full w-full"
         onClick={handleCanvasClick}

@@ -29,6 +29,7 @@ interface StringSimulatorProps {
   analysisLoading: boolean;
   analysisError?: string | null;
   onHighlight: (states: Set<string>) => void;
+  onSimulationChange?: (simulation: AutomataSimulationResult | null) => void;
 }
 
 type SimStatus = "idle" | "running" | "accepted" | "rejected";
@@ -186,6 +187,7 @@ export function StringSimulator({
   analysisLoading,
   analysisError,
   onHighlight,
+  onSimulationChange,
 }: StringSimulatorProps) {
   const [input, setInput] = useState("");
   const [stepIndex, setStepIndex] = useState(-1);
@@ -223,7 +225,8 @@ export function StringSimulator({
     setStatus("idle");
     setShowDeltaStar(false);
     onHighlight(new Set());
-  }, [onHighlight]);
+    onSimulationChange?.(null);
+  }, [onHighlight, onSimulationChange]);
 
   useEffect(() => {
     setSimulation(null);
@@ -231,7 +234,8 @@ export function StringSimulator({
     setStatus("idle");
     setShowDeltaStar(false);
     onHighlight(new Set());
-  }, [onHighlight, theoryKey]);
+    onSimulationChange?.(null);
+  }, [onHighlight, onSimulationChange, theoryKey]);
 
   const commitResult = useCallback(
     (result: AutomataSimulationResult, nextStepIndex: number, nextStatus: SimStatus) => {
@@ -239,8 +243,9 @@ export function StringSimulator({
       setStepIndex(nextStepIndex);
       setStatus(nextStatus);
       syncHighlight(result, nextStepIndex);
+      onSimulationChange?.(result);
     },
-    [syncHighlight],
+    [onSimulationChange, syncHighlight],
   );
 
   const execute = useCallback(async () => {
