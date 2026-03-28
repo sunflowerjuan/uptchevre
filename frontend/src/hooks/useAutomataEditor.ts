@@ -1,6 +1,15 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { EPSILON_SYMBOL, normalizeSymbol } from "@/lib/automata";
 
+/**
+ * Modelo teórico usado por el editor.
+ *
+ * El frontend conserva el mismo objeto formal que usa el análisis:
+ * M = (Q, Σ, δ, q0, F)
+ *
+ * La diferencia es que aquí cada estado también tiene coordenadas para el
+ * canvas. Esas coordenadas son puramente visuales y no alteran el formalismo.
+ */
 export interface AutomataState {
   id: string;
   label: string;
@@ -25,7 +34,13 @@ export interface AutomataData {
 
 export type EditorTool = "select" | "addState" | "addTransition" | "delete";
 
-/** Parse multi-symbol notation: "1+0", "1|0", "1,0" → ["1","0"] */
+/**
+ * Convierte la entrada del usuario a símbolos formales.
+ *
+ * Convenciones del editor:
+ * - entrada vacía => ε
+ * - "a+b", "a|b", "a,b" => varios símbolos para el mismo par de estados
+ */
 export function parseSymbols(input: string): string[] {
   if (input.trim().length === 0) {
     return [EPSILON_SYMBOL];
@@ -112,6 +127,7 @@ export function useAutomataEditor() {
 
   const addState = useCallback(
     (x: number, y: number) => {
+      // Convención didáctica: el primer estado creado se considera q0 e inicial.
       const id = `q${stateCounter}`;
       const newState: AutomataState = {
         id,
@@ -146,6 +162,7 @@ export function useAutomataEditor() {
 
   const toggleAccept = useCallback(
     (id: string) => {
+      // Marca pertenencia o no pertenencia al conjunto F.
       setDataWithHistory((prev) => ({
         ...prev,
         states: prev.states.map((s) =>
@@ -158,6 +175,7 @@ export function useAutomataEditor() {
 
   const setInitial = useCallback(
     (id: string) => {
+      // Desde el editor visual se fuerza un único estado inicial activo.
       setDataWithHistory((prev) => ({
         ...prev,
         states: prev.states.map((s) => ({ ...s, isInitial: s.id === id })),
@@ -181,6 +199,8 @@ export function useAutomataEditor() {
 
   const addTransition = useCallback(
     (from: string, to: string, symbolInput: string) => {
+      // Cada transición agregada aquí formará luego parte de la relación usada
+      // para construir δ y δ*.
       const symbols = parseSymbols(symbolInput);
       if (symbols.length === 0) return;
       setDataWithHistory((prev) => {
@@ -207,11 +227,9 @@ export function useAutomataEditor() {
       const newSymbols = parseSymbols(newInput);
       if (newSymbols.length === 0) return;
       setDataWithHistory((prev) => {
-        // Remove old transitions for this pair
         let transitions = prev.transitions.filter(
           (t) => !(t.from === from && t.to === to && oldSymbols.includes(t.symbol))
         );
-        // Add new
         for (const symbol of newSymbols) {
           const normalized = normalizeSymbol(symbol);
           const symbolKey = normalized === EPSILON_SYMBOL ? "epsilon" : normalized;

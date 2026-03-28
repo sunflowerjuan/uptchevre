@@ -2,6 +2,12 @@ import type { AutomataData } from "@/hooks/useAutomataEditor";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
+/**
+ * Cliente técnico del frontend.
+ *
+ * No implementa teoría: solo transporta al frontend los resultados ya
+ * calculados por el motor formal de la aplicación.
+ */
 async function postJson<TResponse>(path: string, body: unknown): Promise<TResponse> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
@@ -80,6 +86,7 @@ export interface DeltaStarStep {
   closureStateNames: string[];
 }
 
+/** Paso serializado de una traza concreta. */
 export interface SimulationPathStep {
   fromId: string;
   fromName: string;
@@ -99,6 +106,7 @@ export interface SimulationPath {
   haltedAtIndex: number;
 }
 
+/** Respuesta serializada de la simulación de una palabra. */
 export interface AutomataSimulationResult {
   automatonType: AutomatonType;
   accepted: boolean;

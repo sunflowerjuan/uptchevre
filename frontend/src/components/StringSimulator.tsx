@@ -12,6 +12,17 @@ import type {
 import { simulateAutomatonRequest } from "@/lib/automata-api";
 import { displayWord, getTheorySnapshot } from "@/lib/automata";
 
+/**
+ * Presentación pedagógica de la simulación.
+ *
+ * El cálculo formal de δ* ya llega resuelto; este componente organiza su
+ * visualización como:
+ * - caso base
+ * - pasos recursivos
+ * - resultado
+ * - verificación respecto a F
+ * - conclusión final
+ */
 interface StringSimulatorProps {
   data: AutomataData;
   analysis?: AutomataAnalysisResult;
@@ -33,6 +44,8 @@ function formatInitialArgument(analysis?: AutomataAnalysisResult) {
 }
 
 function getVisibleTuples(path: SimulationPath, currentStepIndex: number, revealAll: boolean) {
+  // Permite revelar las tuplas progresivamente cuando el usuario avanza
+  // la simulación con el botón Paso.
   if (revealAll) {
     return path.steps.map((step) => `(${step.fromName}, ${step.displaySymbol}, ${step.toName})`);
   }
@@ -92,6 +105,7 @@ function getDeltaStarLines(
   simulation: AutomataSimulationResult,
   traceIndex: number,
 ) {
+  // Reescribe cada paso de DeltaStarStep en forma matemática legible.
   const trace = simulation.deltaStar[traceIndex];
   const initialArgument = formatInitialArgument(analysis);
 
@@ -138,6 +152,7 @@ function getDeltaStarLines(
 }
 
 function getFinalResult(analysis: NonNullable<AutomataAnalysisResult>, simulation: AutomataSimulationResult) {
+  // Resume el cierre semántico de la simulación para la palabra completa.
   const finalStep = simulation.deltaStar[simulation.deltaStar.length - 1];
   const finalSet = formatStateSet(finalStep.closureStateNames);
   const finalState = finalStep.closureStateNames[0] ?? "\u2205";

@@ -2,6 +2,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { EPSILON_DISPLAY } from "@/lib/automata";
 import type { AutomataAnalysisResult } from "@/lib/automata-api";
 
+/**
+ * Presentación visual del formalismo.
+ *
+ * Este componente muestra en pantalla la interpretación matemática del
+ * autómata ya analizado:
+ * - 5-tupla
+ * - matriz de transición
+ * - definiciones explícitas de δ
+ * - clausura-ε por estado cuando aplica
+ */
 interface FormalismPanelProps {
   hasStates: boolean;
   analysis?: AutomataAnalysisResult;
@@ -48,6 +58,7 @@ function getTransitionDefinitions(
   transitionSymbols: string[],
   groupedTransitions: Map<string, string[]>,
 ) {
+  // Convierte la matriz en definiciones puntuales del tipo δ(q, a) = ...
   return analysis.states.flatMap((state) =>
     transitionSymbols.map((symbol) => ({
       key: `${state.id}-${symbol}`,
