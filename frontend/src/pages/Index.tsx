@@ -5,7 +5,6 @@ import { FormalismPanel } from "@/components/FormalismPanel";
 import { StringSimulator } from "@/components/StringSimulator";
 import { EditorToolbar } from "@/components/EditorToolbar";
 import { Header } from "@/layout/header";
-import { Footer } from "@/layout/footer";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
 import { SettingsPanel } from "@/layout/settingsPanel";
 
@@ -89,8 +88,6 @@ const Index = () => {
           </>
         </aside>
       </div>
-
-      <Footer />
     </div>
   );
 };
