@@ -15,11 +15,29 @@ import type {
   SimulationPathStep,
 } from "./types.js";
 
+/**
+ * Simulación formal de palabras.
+ *
+ * Este módulo aplica la definición de δ*:
+ * - DFA:    δ*(q, ε) = q
+ * - NFA:    δ*(q, ε) = {q}
+ * - NFA-ε:  δ*(q, ε) = E(q)
+ *
+ * Después avanza símbolo a símbolo combinando move y clausura-ε.
+ */
 function getAcceptedSet(automaton: AutomataData): Set<string> {
   return new Set(automaton.states.filter((state) => state.isAccept).map((state) => state.id));
 }
 
 function buildDeltaStar(automaton: AutomataData, word: string): DeltaStarStep[] {
+  /**
+   * Construye explícitamente la evolución de δ* sobre toda la palabra.
+   *
+   * El paso 0 es el caso base.
+   * Cada paso posterior registra:
+   * - reachable: resultado de consumir el símbolo actual
+   * - closure:   expansión posterior por ε cuando aplica
+   */
   const { nameMap } = buildTransitionMap(automaton);
   const initialIds = getInitialStates(automaton).map((state) => state.id);
   let currentClosure = epsilonClosure(automaton, initialIds);
@@ -65,6 +83,12 @@ function enumeratePaths(
   word: string,
   maxPaths = 12,
 ): { acceptedPaths: SimulationPath[]; rejectedPaths: SimulationPath[] } {
+  /**
+   * Recorre caminos concretos para fines explicativos.
+   *
+   * δ* decide aceptación a nivel de conjunto.
+   * Estas trazas muestran ejemplos de ramas particulares útiles para docencia.
+   */
   const { outgoing, nameMap } = buildTransitionMap(automaton);
   const acceptSet = getAcceptedSet(automaton);
   const acceptedPaths: SimulationPath[] = [];
@@ -100,6 +124,7 @@ function enumeratePaths(
     stepPath: SimulationPathStep[],
     visiting: Set<string>,
   ) => {
+    // Evita ciclos infinitos por ε sobre el mismo índice de lectura.
     if (acceptedPaths.length >= maxPaths && rejectedPaths.length >= maxPaths) {
       return;
     }
@@ -178,6 +203,12 @@ function enumeratePaths(
 }
 
 export function simulateAutomaton(automaton: AutomataData, word: string): AutomataSimulationResult {
+  /**
+   * Evalúa la palabra completa y devuelve:
+   * - los pasos de δ*
+   * - el veredicto de aceptación
+   * - trazas concretas de apoyo
+   */
   const analysis = analyzeAutomaton(automaton);
   const deltaStar = buildDeltaStar(automaton, word);
   const lastStep = deltaStar[deltaStar.length - 1];

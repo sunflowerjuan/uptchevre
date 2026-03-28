@@ -7,6 +7,13 @@ export interface EquivalenceResult {
   error?: string;
 }
 
+/**
+ * Equivalencia entre autómatas deterministas.
+ *
+ * La comparación recorre el producto de estados (q1, q2). Si encuentra un par
+ * donde uno acepta y el otro no, reconstruye la palabra que llevó a esa
+ * discrepancia y la devuelve como contraejemplo.
+ */
 export function areAutomataEquivalent(a1: AutomataData, a2: AutomataData): EquivalenceResult {
   const det1 = checkDeterminism(a1);
   const det2 = checkDeterminism(a2);
@@ -49,6 +56,7 @@ export function areAutomataEquivalent(a1: AutomataData, a2: AutomataData): Equiv
     const current = queue.shift() as Pair;
     const currentKey = keyOf(current);
 
+    // Diferencia semántica: uno acepta la palabra acumulada y el otro no.
     if (isAccept1(current.s1) !== isAccept2(current.s2)) {
       const word: string[] = [];
       let k: string | null = currentKey;
@@ -66,6 +74,7 @@ export function areAutomataEquivalent(a1: AutomataData, a2: AutomataData): Equiv
     }
 
     for (const sym of alphabet) {
+      // null actúa como estado sumidero implícito para transiciones ausentes.
       const next: Pair = {
         s1: getNext(d1.delta, current.s1, sym),
         s2: getNext(d2.delta, current.s2, sym),

@@ -11,6 +11,10 @@ const PORT = Number(process.env.PORT ?? 4000);
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
+// La API expone tres operaciones formales:
+// - analyze: describe la estructura del autómata
+// - simulate: aplica δ* a una palabra
+// - equivalent: compara dos DFA mediante producto de estados
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "uptchevre-backend" });
 });

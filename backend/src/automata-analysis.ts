@@ -10,6 +10,17 @@ import type {
   TransitionDescriptor,
 } from "./types.js";
 
+/**
+ * Núcleo formal del análisis.
+ *
+ * Este módulo define cómo el proyecto interpreta la teoría de autómatas:
+ * - qué cuenta como símbolo de entrada
+ * - cómo se detecta ε
+ * - cómo se construye una vista indexada de δ
+ * - cómo se calcula move
+ * - cómo se calcula la clausura-ε
+ * - cómo se clasifica un autómata como DFA, NFA o NFA-ε
+ */
 export const EPSILON_SYMBOL = "";
 export const EPSILON_DISPLAY = "\u03b5";
 
@@ -22,6 +33,7 @@ export function isEpsilonSymbol(symbol: string): boolean {
 }
 
 export function getInputAlphabet(automaton: AutomataData): string[] {
+  // Σ nunca incluye ε; las transiciones vacías se modelan aparte.
   const explicitAlphabet = automaton.alphabet
     .map(normalizeSymbol)
     .filter((symbol) => !isEpsilonSymbol(symbol));
@@ -49,6 +61,8 @@ export function getInitialStates(automaton: AutomataData): AutomataState[] {
 }
 
 export function getStateNameMap(automaton: AutomataData): Map<string, string> {
+  // La teoría opera con nombres de estado. La UI aporta ids y labels.
+  // Este mapa decide el nombre formal estable que se mostrará en la interfaz.
   const labelCount = new Map<string, number>();
 
   for (const state of automaton.states) {
@@ -75,6 +89,7 @@ export function getStateNameMap(automaton: AutomataData): Map<string, string> {
 export interface TransitionMap {
   stateMap: Map<string, AutomataState>;
   nameMap: Map<string, string>;
+  /** Vista indexada de δ por clave (estado, símbolo). */
   outgoing: Map<string, AutomataTransition[]>;
 }
 
@@ -106,6 +121,11 @@ export function epsilonClosure(
   automaton: AutomataData,
   startIds: Iterable<string>,
 ): Set<string> {
+  /**
+   * Clausura-ε:
+   * conjunto de estados alcanzables desde startIds usando cero o más
+   * transiciones ε. Siempre contiene a startIds.
+   */
   const { outgoing } = buildTransitionMap(automaton);
   const closure = new Set<string>(startIds);
   const queue = Array.from(closure);
@@ -130,6 +150,11 @@ export function move(
   stateIds: Iterable<string>,
   symbol: string,
 ): Set<string> {
+  /**
+   * move(S, a):
+   * conjunto de estados alcanzables consumiendo exactamente a desde
+   * cualquier estado del conjunto S.
+   */
   const { outgoing } = buildTransitionMap(automaton);
   const next = new Set<string>();
   const normalized = normalizeSymbol(symbol);
@@ -145,6 +170,9 @@ export function move(
 }
 
 export function getDeterminismIssues(automaton: AutomataData): DeterminismIssueDescriptor[] {
+  // El modelo deja de ser DFA si:
+  // - hay más de un estado inicial
+  // - una pareja (estado, símbolo) tiene más de un destino
   const { nameMap, outgoing } = buildTransitionMap(automaton);
   const issues: DeterminismIssueDescriptor[] = [];
 
@@ -175,6 +203,10 @@ export function getDeterminismIssues(automaton: AutomataData): DeterminismIssueD
 }
 
 export function detectAutomatonType(automaton: AutomataData): AutomatonType {
+  // Orden de decisión:
+  // 1. Si aparece ε, el autómata es NFA-ε.
+  // 2. Si no hay ε pero sí múltiples destinos, es NFA.
+  // 3. En otro caso, es DFA.
   const hasEpsilon = automaton.transitions.some((transition) =>
     isEpsilonSymbol(transition.symbol),
   );
@@ -192,6 +224,13 @@ export function detectAutomatonType(automaton: AutomataData): AutomatonType {
 }
 
 export function analyzeAutomaton(automaton: AutomataData): AutomataAnalysisResult {
+  /**
+   * Traduce el autómata al vocabulario formal que consume la interfaz:
+   * - 5-tupla
+   * - conjuntos de iniciales y de aceptación
+   * - tabla de transición
+   * - clausura-ε por estado
+   */
   const nameMap = getStateNameMap(automaton);
   const automatonType = detectAutomatonType(automaton);
   const supportsEpsilon = automatonType === "NFA_EPSILON";

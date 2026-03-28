@@ -1,6 +1,12 @@
 import type { AutomataData, AutomataState, AutomataTransition } from "./types.js";
 import { getInputAlphabet, normalizeSymbol } from "./automata-analysis.js";
 
+/**
+ * Utilidades específicas del caso determinista.
+ *
+ * Se usan sobre todo en equivalencia de DFA, donde conviene disponer
+ * de una estructura compacta del tipo (estado, símbolo) -> estado.
+ */
 export interface DeterminismIssue {
   stateId: string;
   symbol: string;
@@ -21,6 +27,8 @@ export function getInitialState(a: AutomataData): AutomataState | undefined {
 }
 
 export function checkDeterminism(a: AutomataData): DeterminismCheckResult {
+  // Si dos transiciones comparten (estado, símbolo), δ deja de ser función
+  // unívoca y el modelo ya no puede tratarse como DFA.
   const issues: DeterminismIssue[] = [];
   const byStateAndSymbol = new Map<string, AutomataTransition[]>();
 
@@ -52,6 +60,7 @@ export interface DfaStructure {
 }
 
 export function buildDfaStructure(a: AutomataData): DfaStructure {
+  // Serializa δ como mapa directo para el recorrido BFS del producto de estados.
   const alphabet = getAlphabet(a);
   const delta = new Map<string, string>();
 

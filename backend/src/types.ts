@@ -1,3 +1,15 @@
+/**
+ * Contrato formal compartido por las operaciones teóricas del backend.
+ *
+ * Todas las funciones del backend parten del mismo modelo:
+ * M = (Q, Σ, δ, q0, F)
+ *
+ * Estas interfaces sirven para representar:
+ * - el autómata base dibujado por el usuario
+ * - la proyección formal que consume la interfaz
+ * - los pasos de simulación de δ*
+ * - las trazas concretas de aceptación y rechazo
+ */
 export interface AutomataState {
   id: string;
   label: string;
@@ -11,12 +23,22 @@ export interface AutomataTransition {
   id: string;
   from: string;
   to: string;
+  /**
+   * Símbolo consumido por la transición.
+   *
+   * Convención del proyecto:
+   * - ""  equivale a ε
+   * - cualquier otro string representa un símbolo ordinario de Σ
+   */
   symbol: string;
 }
 
 export interface AutomataData {
+  // conjunto finito de estados. 
   states: AutomataState[];
+  // Relación operativa usada para construir funcion de transicion.
   transitions: AutomataTransition[];
+  // alfabeto de entrada explícito o inferido desde las transiciones. */
   alphabet: string[];
 }
 
@@ -54,6 +76,7 @@ export interface EClosureDescriptor {
 }
 
 export interface AutomataAnalysisResult {
+  // Clasificación estructural: DFA, NFA o NFA-ε. 
   automatonType: AutomatonType;
   alphabet: string[];
   states: StateDescriptor[];
@@ -65,6 +88,14 @@ export interface AutomataAnalysisResult {
   supportsEpsilon: boolean;
 }
 
+/**
+ * Paso observable de la función de transición extendida .
+ * - reachable = resultado inmediato de aplicar move con el símbolo actual
+ * - closure   = resultado final tras aplicar clausura-ε
+ * En DFA, reachable y closure contienen un único estado.
+ * En NFA, closure coincide con reachable.
+ * En NFA-e, closure puede expandirse más allá de reachable.
+ */
 export interface DeltaStarStep {
   index: number;
   consumedSymbol: string | null;
@@ -76,6 +107,7 @@ export interface DeltaStarStep {
   closureStateNames: string[];
 }
 
+// Paso elemental de una traza concreta sobre una palabra. 
 export interface SimulationPathStep {
   fromId: string;
   fromName: string;
@@ -86,6 +118,7 @@ export interface SimulationPathStep {
   consumedIndex: number;
 }
 
+// Camino concreto seguido por la simulación para explicar aceptación o rechazo.
 export interface SimulationPath {
   stateIds: string[];
   stateNames: string[];
@@ -95,6 +128,7 @@ export interface SimulationPath {
   haltedAtIndex: number;
 }
 
+// Resultado final de aplicar FTE a una palabra.
 export interface AutomataSimulationResult {
   automatonType: AutomatonType;
   accepted: boolean;
