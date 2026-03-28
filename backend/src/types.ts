@@ -2,7 +2,7 @@
  * Contrato formal compartido por las operaciones teóricas del backend.
  *
  * Todas las funciones del backend parten del mismo modelo:
- * M = (Q, Σ, δ, q0, F)
+ * A = (Q, , δ, q0, F)
  *
  * Estas interfaces sirven para representar:
  * - el autómata base dibujado por el usuario
@@ -27,8 +27,8 @@ export interface AutomataTransition {
    * Símbolo consumido por la transición.
    *
    * Convención del proyecto:
-   * - ""  equivale a ε
-   * - cualquier otro string representa un símbolo ordinario de Σ
+   * - ""  equivale a \u03b5
+   * - cualquier otro string representa un s\u00edmbolo ordinario de \u03a3
    */
   symbol: string;
 }
