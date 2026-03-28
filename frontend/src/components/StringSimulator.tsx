@@ -87,7 +87,7 @@ function getAcceptanceCriterion(type: NonNullable<AutomataAnalysisResult>["autom
   return "Acepta w si \u03b4*(q\u2080, w) \u2229 F \u2260 \u2205.";
 }
 
-function getDeltaStarLine(
+function getDeltaStarLines(
   analysis: NonNullable<AutomataAnalysisResult>,
   simulation: AutomataSimulationResult,
   traceIndex: number,
@@ -97,14 +97,17 @@ function getDeltaStarLine(
 
   if (traceIndex === 0) {
     if (analysis.automatonType === "DFA") {
-      return `Base: \u03b4*(${initialArgument}, \u03b5) = ${trace.closureStateNames[0] ?? "\u2205"}`;
+      return [`Base: \u03b4*(${initialArgument}, \u03b5) = ${trace.closureStateNames[0] ?? "\u2205"}`];
     }
 
     if (analysis.automatonType === "NFA") {
-      return `Base: \u03b4*(${initialArgument}, \u03b5) = ${formatStateSet(trace.closureStateNames)}`;
+      return [`Base: \u03b4*(${initialArgument}, \u03b5) = ${formatStateSet(trace.closureStateNames)}`];
     }
 
-    return `Base: \u03b4*(${initialArgument}, \u03b5) = Clausura-\u03b5(${initialArgument}) = ${formatStateSet(trace.closureStateNames)}`;
+    return [
+      `Base: \u03b4*(${initialArgument}, \u03b5) = E(${initialArgument})`,
+      `E(${initialArgument}) = ${formatStateSet(trace.closureStateNames)}`,
+    ];
   }
 
   const previous = simulation.deltaStar[traceIndex - 1];
@@ -113,14 +116,53 @@ function getDeltaStarLine(
   const currentPrefix = trace.prefix === "" ? "\u03b5" : trace.prefix;
 
   if (analysis.automatonType === "DFA") {
-    return `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = \u03b4(\u03b4*(${initialArgument}, ${previousPrefix}), ${consumedSymbol}) = \u03b4(${previous.closureStateNames[0] ?? "\u2205"}, ${consumedSymbol}) = ${trace.closureStateNames[0] ?? "\u2205"}`;
+    return [
+      `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = \u03b4(\u03b4*(${initialArgument}, ${previousPrefix}), ${consumedSymbol})`,
+      `\u03b4*(${initialArgument}, ${currentPrefix}) = \u03b4(${previous.closureStateNames[0] ?? "\u2205"}, ${consumedSymbol})`,
+      `\u03b4*(${initialArgument}, ${currentPrefix}) = ${trace.closureStateNames[0] ?? "\u2205"}`,
+    ];
   }
 
   if (analysis.automatonType === "NFA") {
-    return `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = \u22c3 \u03b4(p, ${consumedSymbol}), p \u2208 ${formatStateSet(previous.closureStateNames)} = ${formatStateSet(trace.closureStateNames)}`;
+    return [
+      `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = \u22c3 \u03b4(p, ${consumedSymbol}), p \u2208 ${formatStateSet(previous.closureStateNames)}`,
+      `\u03b4*(${initialArgument}, ${currentPrefix}) = ${formatStateSet(trace.closureStateNames)}`,
+    ];
   }
 
-  return `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = Clausura-\u03b5(\u22c3 \u03b4(p, ${consumedSymbol}), p \u2208 ${formatStateSet(previous.closureStateNames)}) = ${formatStateSet(trace.closureStateNames)}`;
+  return [
+    `Recursiva: \u03b4*(${initialArgument}, ${currentPrefix}) = E(\u22c3 \u03b4(p, ${consumedSymbol}), p \u2208 ${formatStateSet(previous.closureStateNames)})`,
+    `\u22c3 \u03b4(p, ${consumedSymbol}), p \u2208 ${formatStateSet(previous.closureStateNames)} = ${formatStateSet(trace.reachableStateNames)}`,
+    `E(${formatStateSet(trace.reachableStateNames)}) = ${formatStateSet(trace.closureStateNames)}`,
+  ];
+}
+
+function getFinalResult(analysis: NonNullable<AutomataAnalysisResult>, simulation: AutomataSimulationResult) {
+  const finalStep = simulation.deltaStar[simulation.deltaStar.length - 1];
+  const finalSet = formatStateSet(finalStep.closureStateNames);
+  const finalState = finalStep.closureStateNames[0] ?? "\u2205";
+  const acceptSet = formatStateSet(analysis.acceptStates.map((state) => state.name));
+  const acceptedStates = finalStep.closureStateNames.filter((state) =>
+    analysis.acceptStates.some((acceptState) => acceptState.name === state),
+  );
+
+  if (analysis.automatonType === "DFA") {
+    return {
+      result: `\u03b4*(q\u2080, ${displayWord(simulation.word)}) = ${finalState}`,
+      verification: simulation.accepted
+        ? `${finalState} \u2208 F = ${acceptSet}`
+        : `${finalState} \u2209 F = ${acceptSet}`,
+      conclusion: simulation.accepted ? "ACEPTADA" : "NO ACEPTADA",
+    };
+  }
+
+  return {
+    result: `\u03b4*(q\u2080, ${displayWord(simulation.word)}) = ${finalSet}`,
+    verification: simulation.accepted
+      ? `${finalSet} \u2229 F = ${formatStateSet(acceptedStates)} \u2260 \u2205`
+      : `${finalSet} \u2229 F = \u2205`,
+    conclusion: simulation.accepted ? "ACEPTADA" : "NO ACEPTADA",
+  };
 }
 
 export function StringSimulator({
@@ -320,9 +362,6 @@ export function StringSimulator({
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Función de transición extendida
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      Base y paso recursivo aplicados a la palabra actual.
-                    </p>
                   </div>
                   <Button
                     type="button"
@@ -360,12 +399,32 @@ export function StringSimulator({
                               isActive ? "border-primary bg-primary/5" : "bg-card"
                             }`}
                           >
-                            <p className="font-mono text-foreground">
-                              {getDeltaStarLine(analysis, simulation, index)}
-                            </p>
+                            <div className="space-y-1 font-mono text-foreground">
+                              {getDeltaStarLines(analysis, simulation, index).map((line, lineIndex) => (
+                                <p key={`delta-star-${index}-${lineIndex}`}>{line}</p>
+                              ))}
+                            </div>
                           </div>
                         );
                       })}
+
+                    {simulation.deltaStar.length > 0 && (
+                      <div className="rounded-lg border bg-muted/20 px-3 py-3 text-xs">
+                        {(() => {
+                          const finalResult = getFinalResult(analysis, simulation);
+                          return (
+                            <div className="space-y-1">
+                              <p className="font-semibold text-foreground">Resultado</p>
+                              <p className="font-mono text-foreground">{finalResult.result}</p>
+                              <p className="font-semibold text-foreground">Verificación</p>
+                              <p className="font-mono text-foreground">{finalResult.verification}</p>
+                              <p className="font-semibold text-foreground">Conclusión</p>
+                              <p className="font-mono text-foreground">{finalResult.conclusion}</p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
