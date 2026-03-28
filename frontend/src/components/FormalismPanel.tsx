@@ -11,9 +11,6 @@ interface FormalismPanelProps {
 
 const SIGMA = "\u03a3";
 const DELTA = "\u03b4";
-const DELTA_STAR = "\u03b4*";
-const TIMES = "\u00d7";
-const UNION = "\u222a";
 const EMPTY_SET = "\u2205";
 
 function getTupleLabel(type: AutomataAnalysisResult["automatonType"]) {
@@ -22,14 +19,9 @@ function getTupleLabel(type: AutomataAnalysisResult["automatonType"]) {
 }
 
 function getTransitionFormula(type: AutomataAnalysisResult["automatonType"]) {
-  if (type === "DFA") return `${DELTA}: Q ${TIMES} ${SIGMA} \u2192 Q`;
-  if (type === "NFA") return `${DELTA}: Q ${TIMES} ${SIGMA} \u2192 2^Q`;
-  return `${DELTA}: Q ${TIMES} (${SIGMA} ${UNION} {${EPSILON_DISPLAY}}) \u2192 2^Q`;
-}
-
-function getExtendedFormula(type: AutomataAnalysisResult["automatonType"]) {
-  if (type === "DFA") return `${DELTA_STAR}: Q ${TIMES} ${SIGMA}* \u2192 Q`;
-  return `${DELTA_STAR}: Q ${TIMES} ${SIGMA}* \u2192 2^Q`;
+  if (type === "DFA") return `${DELTA}: Q \u00d7 ${SIGMA} \u2192 Q`;
+  if (type === "NFA") return `${DELTA}: Q \u00d7 ${SIGMA} \u2192 2^Q`;
+  return `${DELTA}: Q \u00d7 (${SIGMA} \u222a {${EPSILON_DISPLAY}}) \u2192 2^Q`;
 }
 
 function getGroupedTransitions(analysis: AutomataAnalysisResult) {
@@ -49,6 +41,24 @@ function formatTargets(type: AutomataAnalysisResult["automatonType"], targets: s
   if (targets.length === 0) return EMPTY_SET;
   if (type === "DFA") return targets[0] ?? EMPTY_SET;
   return `{${targets.join(", ")}}`;
+}
+
+function getTransitionDefinitions(
+  analysis: AutomataAnalysisResult,
+  transitionSymbols: string[],
+  groupedTransitions: Map<string, string[]>,
+) {
+  return analysis.states.flatMap((state) =>
+    transitionSymbols.map((symbol) => ({
+      key: `${state.id}-${symbol}`,
+      stateName: state.name,
+      symbol,
+      value: formatTargets(
+        analysis.automatonType,
+        groupedTransitions.get(`${state.name}::${symbol}`) ?? [],
+      ),
+    })),
+  );
 }
 
 export function FormalismPanel({
@@ -91,6 +101,11 @@ export function FormalismPanel({
     ? [...analysis.alphabet, EPSILON_DISPLAY]
     : analysis.alphabet;
   const groupedTransitions = getGroupedTransitions(analysis);
+  const transitionDefinitions = getTransitionDefinitions(
+    analysis,
+    transitionSymbols,
+    groupedTransitions,
+  );
   const initialNames = analysis.initialStates.map((state) => state.name);
   const acceptNames = analysis.acceptStates.map((state) => state.name);
   const q0Value =
@@ -101,22 +116,9 @@ export function FormalismPanel({
       <div className="space-y-5 p-4">
         <section className="space-y-3 rounded-lg border bg-card p-3">
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">
-              Tipo identificado: {getTupleLabel(analysis.automatonType)}
-            </p>
-            <p className="font-mono text-xs text-muted-foreground">
-              {getTransitionFormula(analysis.automatonType)}
-            </p>
-            <p className="font-mono text-xs text-muted-foreground">
-              {getExtendedFormula(analysis.automatonType)}
-            </p>
+            <p className="text-sm font-semibold text-foreground">{getTupleLabel(analysis.automatonType)}</p>
+            <p className="font-mono text-sm text-foreground">A = (Q, {SIGMA}, {DELTA}, q₀, F)</p>
           </div>
-        </section>
-
-        <section className="space-y-3 rounded-lg border bg-card p-3">
-          <p className="font-mono text-sm text-foreground">
-            {getTupleLabel(analysis.automatonType)} = (Q, {SIGMA}, {DELTA}, q\u2080, F)
-          </p>
 
           <div className="space-y-2 text-xs">
             <div>
@@ -136,7 +138,7 @@ export function FormalismPanel({
             </div>
 
             <div>
-              <span className="font-semibold text-primary">q\u2080</span>
+              <span className="font-semibold text-primary">q₀</span>
               <span className="text-muted-foreground"> = </span>
               <span className="font-mono">{q0Value}</span>
             </div>
@@ -152,7 +154,7 @@ export function FormalismPanel({
 
         <section className="space-y-3 rounded-lg border bg-card p-3">
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">Función de transición</p>
+            <p className="text-sm font-semibold text-foreground">Matriz de transición</p>
             <p className="font-mono text-xs text-muted-foreground">
               {getTransitionFormula(analysis.automatonType)}
             </p>
@@ -195,6 +197,31 @@ export function FormalismPanel({
           ) : (
             <p className="text-xs text-muted-foreground">
               Agrega símbolos y transiciones para completar la tabla.
+            </p>
+          )}
+        </section>
+
+        <section className="space-y-3 rounded-lg border bg-card p-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Función de transición</p>
+            <p className="font-mono text-xs text-muted-foreground">
+              {getTransitionFormula(analysis.automatonType)}
+            </p>
+          </div>
+
+          {transitionDefinitions.length > 0 ? (
+            <div className="space-y-1 rounded-lg border p-3 font-mono text-xs text-foreground">
+              <p>{DELTA} = {"{"}</p>
+              {transitionDefinitions.map((definition) => (
+                <p key={definition.key} className="pl-3">
+                  {`${DELTA}(${definition.stateName}, ${definition.symbol}) = ${definition.value},`}
+                </p>
+              ))}
+              <p>{"}"}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Agrega símbolos y transiciones para completar {DELTA}.
             </p>
           )}
         </section>
