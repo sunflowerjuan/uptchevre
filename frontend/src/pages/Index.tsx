@@ -7,6 +7,8 @@ import { EditorToolbar } from "@/components/EditorToolbar";
 import { Header } from "@/layout/header";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
 import { SettingsPanel } from "@/layout/settingsPanel";
+import type { AutomataData } from "@/hooks/useAutomataEditor";
+import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
   const editor = useAutomataEditor();
@@ -20,6 +22,19 @@ const Index = () => {
     setHighlightedStates(states);
   }, []);
 
+  const handleLoadExample = useCallback((example: AutomataData, title: string) => {
+    editor.loadAutomaton(example);
+    setHighlightedStates(new Set());
+    setShowSimulator(true);
+    setShowFormalism(true);
+    setActiveModule("both");
+
+    toast({
+      title: "Ejemplo cargado",
+      description: `Se cargo "${title}" en el editor.`,
+    });
+  }, [editor]);
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <Header
@@ -32,6 +47,7 @@ const Index = () => {
             showFormalism={showFormalism}
             onShowSimulatorChange={setShowSimulator}
             onShowFormalismChange={setShowFormalism}
+            onLoadExample={handleLoadExample}
           />
         }
       />

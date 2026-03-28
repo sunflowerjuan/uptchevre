@@ -1,10 +1,13 @@
-import { GitBranch, Heart, Mail, Instagram, Laptop, Moon, Sun } from "lucide-react";
+import { GitBranch, Heart, Mail, Instagram, Laptop, Moon, PlayCircle, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { AutomataData } from "@/hooks/useAutomataEditor";
+import { AUTOMATA_EXAMPLES } from "@/constants/automataExamples";
 import { CREATORS } from "@/constants/creators";
 
 interface SettingsPanelProps {
@@ -12,6 +15,7 @@ interface SettingsPanelProps {
   showSimulator: boolean;
   onShowFormalismChange: (checked: boolean) => void;
   onShowSimulatorChange: (checked: boolean) => void;
+  onLoadExample: (data: AutomataData, title: string) => void;
 }
 
 export function SettingsPanel({
@@ -19,6 +23,7 @@ export function SettingsPanel({
   showSimulator,
   onShowFormalismChange,
   onShowSimulatorChange,
+  onLoadExample,
 }: SettingsPanelProps) {
   const { theme = "system", setTheme } = useTheme();
 
@@ -205,6 +210,47 @@ export function SettingsPanel({
                     Resume el automata como quintupla y tabla de transiciones.
                   </p>
                 </div>
+              </div>
+            </section>
+
+            <section className="space-y-3 rounded-xl border bg-card p-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Ejemplos interactivos</p>
+                <p className="text-xs text-muted-foreground">
+                  Carga un automata de referencia directamente en el canvas para explorar el editor.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {AUTOMATA_EXAMPLES.map((example) => (
+                  <div key={example.id} className="rounded-lg border p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">{example.title}</p>
+                        <p className="text-xs text-muted-foreground">{example.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Pruebas sugeridas:{" "}
+                          {example.tryWords.map((word, index) => (
+                            <span key={`${example.id}-${word || "epsilon"}-${index}`}>
+                              <span className="font-mono text-foreground">{word === "" ? "ε" : word}</span>
+                              {index < example.tryWords.length - 1 ? ", " : ""}
+                            </span>
+                          ))}
+                        </p>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() => onLoadExample(example.data, example.title)}
+                      >
+                        <PlayCircle className="h-4 w-4" />
+                        Cargar ejemplo
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
 
