@@ -138,3 +138,37 @@ export interface AutomataSimulationResult {
   rejectedPaths: SimulationPath[];
 }
 
+/**
+ * Una fila de la tabla de construcción de subconjuntos.
+ * Cada fila corresponde a un estado del DFA resultante (subconjunto de estados del AFND).
+ */
+export interface TransformationTableRow {
+  dfaStateId: string;
+  dfaStateName: string;
+  nfaStateIds: string[];
+  nfaStateNames: string[];
+  transitions: {
+    symbol: string;
+    targetDfaStateId: string;
+    targetDfaStateName: string;
+  }[];
+  isInitial: boolean;
+  isAccept: boolean;
+}
+
+/**
+ * Resultado de convertir un AFND (NFA o NFA-ε) a un AFD
+ * mediante la construcción de subconjuntos.
+ */
+export interface NfaToDfaTransformationResult {
+  originalType: AutomatonType;
+  dfa: AutomataData;
+  transformationTable: TransformationTableRow[];
+  stateMapping: {
+    dfaStateId: string;
+    dfaStateName: string;
+    nfaStateIds: string[];
+    nfaStateNames: string[];
+  }[];
+}
+
