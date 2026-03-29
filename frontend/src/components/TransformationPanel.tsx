@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -310,7 +310,8 @@ export function TransformationPanel({
   analysisLoading,
   onLoadDfa,
 }: TransformationPanelProps) {
-  const [view, setView] = useState<"nfa" | "dfa">("nfa");
+  const [view, setView] = useState<"nfa" | "dfa" | "both">("nfa");
+  const hadEffectiveResultRef = useRef(false);
   const [stepsOpen, setStepsOpen] = useState(false);
   const [savedResult, setSavedResult] = useState<NfaToDfaTransformationResult | null>(null);
   const [savedNfaAnalysis, setSavedNfaAnalysis] = useState<AutomataAnalysisResult | null>(null);
@@ -356,6 +357,26 @@ export function TransformationPanel({
 
   const effectiveNfaAnalysis = savedNfaAnalysis ?? analysis;
   const effectiveResult = savedResult ?? transformationQuery.data ?? null;
+  const isEditorDfaWithoutConversion =
+    analysis?.automatonType === "DFA" && !effectiveResult;
+
+  // Tras la primera conversión, mostrar AFN + AFD juntos sin salir del panel.
+  useEffect(() => {
+    if (effectiveResult) {
+      if (!hadEffectiveResultRef.current) {
+        setView("both");
+        hadEffectiveResultRef.current = true;
+      }
+    } else {
+      hadEffectiveResultRef.current = false;
+    }
+  }, [effectiveResult]);
+
+  useEffect(() => {
+    if (!effectiveResult && view === "both") {
+      setView("nfa");
+    }
+  }, [effectiveResult, view]);
 
   if (data.states.length === 0) {
     return (
@@ -375,17 +396,6 @@ export function TransformationPanel({
     );
   }
 
-  // Already a DFA with no prior transformation to show
-  if (analysis?.automatonType === "DFA" && !savedResult) {
-    return (
-      <ScrollArea className="h-full">
-        <div className="space-y-4 p-4">
-          <NfaFormalism analysis={analysis} />
-        </div>
-      </ScrollArea>
-    );
-  }
-
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4">
@@ -394,16 +404,29 @@ export function TransformationPanel({
           <Button
             size="sm"
             variant={view === "nfa" ? "default" : "outline"}
-            className="flex-1"
+            className="min-w-0 flex-1"
             onClick={() => setView("nfa")}
           >
             {effectiveNfaAnalysis?.automatonType === "NFA_EPSILON" ? "NFA-ε" : "NFA"}
           </Button>
           <Button
             size="sm"
+            variant={view === "both" ? "default" : "outline"}
+            className="min-w-0 flex-1"
+            disabled={!effectiveResult}
+            onClick={() => setView("both")}
+            title={
+              effectiveResult
+                ? "Ver AFN de entrada y AFD resultante"
+                : "Disponible cuando exista una conversión"
+            }
+          >
+            Ambos
+          </Button>
+          <Button
+            size="sm"
             variant={view === "dfa" ? "default" : "outline"}
-            className="flex-1"
-            disabled={!effectiveResult && transformationQuery.isPending}
+            className="min-w-0 flex-1"
             onClick={() => setView("dfa")}
           >
             AFD
@@ -418,8 +441,13 @@ export function TransformationPanel({
           </p>
         )}
 
-        {view === "nfa" && effectiveNfaAnalysis && (
+        {(view === "nfa" || view === "both") && effectiveNfaAnalysis && (
           <>
+            {view === "both" && effectiveResult && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Entrada (AFN)
+              </p>
+            )}
             <NfaFormalism analysis={effectiveNfaAnalysis} />
             {savedNfaData && JSON.stringify(getTheorySnapshot(data)) !== savedNfaKey && (
               <div className="px-0 pb-2">
@@ -436,8 +464,13 @@ export function TransformationPanel({
           </>
         )}
 
-        {view === "dfa" && effectiveResult && (
+        {(view === "dfa" || view === "both") && effectiveResult && (
           <>
+            {view === "both" && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Resultado (AFD)
+              </p>
+            )}
             <DfaFormalism result={effectiveResult} />
 
             <div className="flex flex-col gap-2 px-0 pb-2">
@@ -456,10 +489,29 @@ export function TransformationPanel({
           </>
         )}
 
-        {view === "dfa" && !effectiveResult && (
-          <div className="flex items-center justify-center py-8">
-            <p className="text-sm text-muted-foreground">Transformando...</p>
-          </div>
+        {(view === "dfa" || view === "both") && !effectiveResult && (
+          <>
+            {transformationQuery.isPending && (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-muted-foreground">Transformando...</p>
+              </div>
+            )}
+            {!transformationQuery.isPending && isEditorDfaWithoutConversion && (
+              <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
+                La conversión AFN→AFD (subconjuntos) aparece aquí cuando el editor contiene un AFN.
+                Este autómata ya es un AFD; usa la vista NFA para ver su descripción formal.
+              </div>
+            )}
+            {!transformationQuery.isPending &&
+              !isEditorDfaWithoutConversion &&
+              view === "dfa" && (
+                <div className="flex items-center justify-center py-8">
+                  <p className="text-center text-sm text-muted-foreground">
+                    Aún no hay resultado de conversión.
+                  </p>
+                </div>
+              )}
+          </>
         )}
       </div>
 

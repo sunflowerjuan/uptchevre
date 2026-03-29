@@ -60,7 +60,6 @@ const Index = () => {
   const handleLoadConvertedDfa = useCallback((dfa: AutomataData) => {
     editor.loadAutomaton(dfa, { name: `${editor.documentName} (AFD)` });
     setHighlightedStates(new Set());
-    setActiveModule("both");
     toast({
       title: "AFD cargado",
       description: "El autómata determinista se cargó en el editor.",
