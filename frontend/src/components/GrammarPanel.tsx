@@ -36,6 +36,18 @@ interface GeneralTreeNode {
   children: GeneralTreeNode[];
 }
 
+interface ProductionDraft extends GrammarProductionInput {
+  id: string;
+}
+
+function createProductionDraft(): ProductionDraft {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    left: "",
+    rule: "",
+  };
+}
+
 function parseSymbolList(input: string) {
   return Array.from(
     new Set(
@@ -56,10 +68,12 @@ function formatRule(tokens: string[]) {
 }
 
 function groupProductions(grammar: GrammarDefinition) {
-  return grammar.nonTerminals.map((nonTerminal) => ({
-    nonTerminal,
-    productions: grammar.productions.filter((production) => production.left === nonTerminal),
-  }));
+  return grammar.nonTerminals
+    .map((nonTerminal) => ({
+      nonTerminal,
+      productions: grammar.productions.filter((production) => production.left === nonTerminal),
+    }))
+    .filter((group) => group.productions.length > 0);
 }
 
 function buildGeneralTree(grammar: GrammarDefinition): GeneralTreeNode {
@@ -88,10 +102,7 @@ function buildGeneralTree(grammar: GrammarDefinition): GeneralTreeNode {
           id: `prod-${production.id}-${index}`,
           label: formatRule(production.rightTokens),
           type: "production",
-          children:
-            canExpand && nextNonTerminal
-              ? [visit(nextNonTerminal, depth + 1)]
-              : [],
+          children: canExpand && nextNonTerminal ? [visit(nextNonTerminal, depth + 1)] : [],
         };
       }),
     };
@@ -111,8 +122,6 @@ function FormalismSet({ label, value }: { label: string; value: string }) {
 
 function FormalismSection({ grammar }: { grammar: GrammarDefinition }) {
   const productionGroups = groupProductions(grammar);
-  const linearityLabel =
-    grammar.linearity === "RIGHT" ? "Regular derecha" : "Regular izquierda";
 
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
@@ -122,37 +131,9 @@ function FormalismSection({ grammar }: { grammar: GrammarDefinition }) {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <FormalismSet
-          label="V"
-          value={`{${grammar.nonTerminals.join(", ") || EPSILON_DISPLAY}}`}
-        />
-        <FormalismSet
-          label="Σ"
-          value={`{${grammar.terminals.join(", ") || EPSILON_DISPLAY}}`}
-        />
+        <FormalismSet label="V" value={`{${grammar.nonTerminals.join(", ") || EPSILON_DISPLAY}}`} />
+        <FormalismSet label="Σ" value={`{${grammar.terminals.join(", ") || EPSILON_DISPLAY}}`} />
         <FormalismSet label="S" value={grammar.startSymbol} />
-        <FormalismSet label="Tipo" value={linearityLabel} />
-      </div>
-
-      <div className="rounded-xl border bg-background/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Reglas permitidas
-        </p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="rounded-lg border bg-card p-3">
-            <p className="text-sm font-semibold text-foreground">Lineal derecha</p>
-            <p className="mt-1 font-mono text-sm text-foreground">A → aB o A → a</p>
-            <p className="mt-1 text-xs text-muted-foreground">Ejemplo: S → 0A</p>
-          </div>
-          <div className="rounded-lg border bg-card p-3">
-            <p className="text-sm font-semibold text-foreground">Lineal izquierda</p>
-            <p className="mt-1 font-mono text-sm text-foreground">A → Ba o A → a</p>
-            <p className="mt-1 text-xs text-muted-foreground">Ejemplo: S → A0</p>
-          </div>
-        </div>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Nunca se puede mezclar lineal derecha con lineal izquierda en la misma gramática.
-        </p>
       </div>
 
       <div className="rounded-xl border bg-background/50 p-4">
@@ -162,15 +143,11 @@ function FormalismSection({ grammar }: { grammar: GrammarDefinition }) {
         <div className="mt-3 space-y-2">
           {productionGroups.map((group) => (
             <div key={group.nonTerminal} className="rounded-lg border bg-card p-3">
-              {group.productions.length > 0 ? (
-                group.productions.map((production) => (
-                  <p key={production.id} className="font-mono text-sm text-foreground">
-                    {production.left} → {formatRule(production.rightTokens)}
-                  </p>
-                ))
-              ) : (
-                <p className="font-mono text-sm text-muted-foreground">{group.nonTerminal} → ...</p>
-              )}
+              {group.productions.map((production) => (
+                <p key={production.id} className="font-mono text-sm text-foreground">
+                  {production.left} → {formatRule(production.rightTokens)}
+                </p>
+              ))}
             </div>
           ))}
         </div>
@@ -179,13 +156,96 @@ function FormalismSection({ grammar }: { grammar: GrammarDefinition }) {
   );
 }
 
-function TreeNodeCard({
-  node,
-  depth = 0,
-}: {
-  node: GeneralTreeNode;
-  depth?: number;
-}) {
+function AutomatonTransformationSection({ grammar }: { grammar: GrammarDefinition }) {
+  const stateMapping = grammar.stateMapping ?? [];
+  const stateNameByNonTerminal = new Map(
+    stateMapping.map((item) => [item.nonTerminal, item.stateName]),
+  );
+  const transitionProductions = grammar.productions.filter((production) => production.rightTokens.length > 0);
+  const epsilonProductions = grammar.productions.filter((production) => production.rightTokens.length === 0);
+
+  return (
+    <section className="space-y-4 rounded-xl border bg-card p-4">
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-foreground">Transformacion desde automata</p>
+        <p className="text-xs text-muted-foreground">
+          Primero se renombran los estados, luego las transiciones se vuelven reglas y al final queda la gramatica equivalente.
+        </p>
+      </div>
+
+      <div className="rounded-xl border bg-background/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          1. Estados a simbolos
+        </p>
+        <div className="mt-3 grid gap-2">
+          {stateMapping.map((item) => (
+            <p key={item.stateId} className="rounded-lg border bg-card p-3 font-mono text-sm text-foreground">
+              {item.stateName} → {item.nonTerminal}
+              {item.isInitial ? " [inicial]" : ""}
+              {item.isAccept ? " [final]" : ""}
+            </p>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-background/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          2. Funciones a reglas
+        </p>
+        <div className="mt-3 space-y-2">
+          {transitionProductions.map((production) => {
+            const terminal = production.rightTokens[0] ?? "";
+            const targetNonTerminal = production.rightTokens[1] ?? "";
+            const fromState = stateNameByNonTerminal.get(production.left) ?? production.left;
+            const targetState = stateNameByNonTerminal.get(targetNonTerminal) ?? targetNonTerminal;
+
+            return (
+              <div key={production.id} className="rounded-lg border bg-card p-3">
+                <p className="font-mono text-sm text-foreground">
+                  δ({fromState}, {terminal}) = {targetState} ⇒ {production.left} →{" "}
+                  {formatRule(production.rightTokens)}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {epsilonProductions.length > 0 && (
+        <div className="rounded-xl border bg-background/50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            3. Estados de aceptacion
+          </p>
+          <div className="mt-3 space-y-2">
+            {epsilonProductions.map((production) => {
+              const stateName = stateNameByNonTerminal.get(production.left) ?? production.left;
+
+              return (
+                <div key={production.id} className="rounded-lg border bg-card p-3">
+                  <p className="font-mono text-sm text-foreground">
+                    {stateName} es final ⇒ {production.left} → {EPSILON_DISPLAY}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border bg-background/50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          4. Gramatica resultante
+        </p>
+        <p className="mt-3 font-mono text-sm text-foreground">
+          G = ({`{${grammar.nonTerminals.join(", ")}}`}, {`{${grammar.terminals.join(", ")}}`}, P,{" "}
+          {grammar.startSymbol})
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function TreeNodeCard({ node }: { node: GeneralTreeNode; depth?: number }) {
   const cardClass =
     node.type === "nonTerminal"
       ? "border-primary/30 bg-primary/5 text-primary"
@@ -193,7 +253,9 @@ function TreeNodeCard({
 
   return (
     <div className="space-y-3">
-      <div className={`inline-flex min-w-28 items-center justify-center rounded-2xl border px-4 py-3 font-mono text-sm font-semibold shadow-sm ${cardClass}`}>
+      <div
+        className={`inline-flex min-w-28 items-center justify-center rounded-2xl border px-4 py-3 font-mono text-sm font-semibold shadow-sm ${cardClass}`}
+      >
         {node.label}
       </div>
 
@@ -202,7 +264,7 @@ function TreeNodeCard({
           {node.children.map((child) => (
             <div key={child.id} className="relative">
               <span className="absolute -left-6 top-5 h-px w-6 bg-border/80" />
-              <TreeNodeCard node={child} depth={depth + 1} />
+              <TreeNodeCard node={child} />
             </div>
           ))}
         </div>
@@ -217,9 +279,9 @@ function GeneralTreeSection({ grammar }: { grammar: GrammarDefinition }) {
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Árbol general</p>
+        <p className="text-sm font-semibold text-foreground">Arbol general</p>
         <p className="text-xs text-muted-foreground">
-          Muestra la estructura abstracta de derivación desde el símbolo inicial.
+          Muestra la estructura abstracta de derivacion desde el simbolo inicial.
         </p>
       </div>
 
@@ -236,9 +298,9 @@ function DerivationTreeSection({ analysis }: { analysis: GrammarWordAnalysis }) 
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Árbol particular</p>
+        <p className="text-sm font-semibold text-foreground">Arbol particular</p>
         <p className="text-xs text-muted-foreground">
-          Se construye con la cadena validada cuando existe una derivación aceptante.
+          Se construye con la cadena validada cuando existe una derivacion aceptante.
         </p>
       </div>
 
@@ -288,9 +350,9 @@ function DerivationSequenceSection({ steps }: { steps: GrammarDerivationStep[] }
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Derivación escrita paso a paso</p>
+        <p className="text-sm font-semibold text-foreground">Derivacion escrita paso a paso</p>
         <p className="text-xs text-muted-foreground">
-          Secuencia completa de derivación para la cadena ingresada.
+          Secuencia completa de derivacion para la cadena ingresada.
         </p>
       </div>
 
@@ -328,7 +390,7 @@ function ConclusionSection({
     <section className="rounded-xl border bg-card p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Conclusión</p>
+          <p className="text-sm font-semibold text-foreground">Conclusion</p>
           <p className="text-sm text-muted-foreground">{analysis.reason}</p>
         </div>
         <div
@@ -350,7 +412,7 @@ function IssuesPanel({ messages }: { messages: string[] }) {
 
   return (
     <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-      <p className="text-sm font-semibold text-destructive">La gramática necesita ajustes</p>
+      <p className="text-sm font-semibold text-destructive">La gramatica necesita ajustes</p>
       <ul className="mt-2 space-y-1 text-sm text-destructive">
         {messages.map((message) => (
           <li key={message}>• {message}</li>
@@ -381,7 +443,7 @@ function ProductionRowEditor({
       <Input
         value={production.rule}
         onChange={(event) => onChange({ ...production, rule: event.target.value })}
-        placeholder={`0A | 1 o A0 | 1`}
+        placeholder="0A | 1 o A0 | 1"
       />
       <div className="flex justify-end">
         <Button type="button" variant="ghost" size="icon" onClick={onRemove} disabled={disableRemove}>
@@ -404,9 +466,9 @@ function ValidationWorkspace({
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Validación</p>
+        <p className="text-sm font-semibold text-foreground">Validacion</p>
         <p className="text-xs text-muted-foreground">
-          Ingresa una cadena para construir el árbol particular, la derivación paso a paso y su pertenencia.
+          Ingresa una cadena para construir el arbol particular, la derivacion paso a paso y su pertenencia.
         </p>
       </div>
 
@@ -427,18 +489,22 @@ function ValidationWorkspace({
 function ManualGrammarWorkspace() {
   const [terminalsInput, setTerminalsInput] = useState("");
   const [nonTerminalsInput, setNonTerminalsInput] = useState("");
-  const [productions, setProductions] = useState<GrammarProductionInput[]>([{ left: "", rule: "" }]);
+  const [productions, setProductions] = useState<ProductionDraft[]>([createProductionDraft()]);
 
   const startSymbol = getStartSymbol(nonTerminalsInput);
+  const normalizedProductions = useMemo<GrammarProductionInput[]>(
+    () => productions.map(({ left, rule }) => ({ left, rule })),
+    [productions],
+  );
 
   const previewQuery = useQuery<GrammarManualAnalysisResult>({
-    queryKey: ["manual-grammar-preview", terminalsInput, nonTerminalsInput, productions],
+    queryKey: ["manual-grammar-preview", terminalsInput, nonTerminalsInput, normalizedProductions],
     queryFn: () =>
       analyzeManualGrammarRequest({
         terminals: parseSymbolList(terminalsInput),
         nonTerminals: parseSymbolList(nonTerminalsInput),
         startSymbol,
-        productions,
+        productions: normalizedProductions,
         word: "",
       }),
     refetchOnWindowFocus: false,
@@ -450,19 +516,19 @@ function ManualGrammarWorkspace() {
         terminals: parseSymbolList(terminalsInput),
         nonTerminals: parseSymbolList(nonTerminalsInput),
         startSymbol,
-        productions,
+        productions: normalizedProductions,
         word,
       }),
   });
 
   useEffect(() => {
     validateMutation.reset();
-  }, [terminalsInput, nonTerminalsInput, productions, startSymbol]);
+  }, [terminalsInput, nonTerminalsInput, normalizedProductions, startSymbol]);
 
   const validation = previewQuery.data?.validation;
   const grammar = validation?.grammar;
   const analysis = validateMutation.data?.analysis;
-  const validatedWord = validateMutation.variables ?? "";
+  const validatedWord = typeof validateMutation.variables === "string" ? validateMutation.variables : "";
 
   return (
     <div className="space-y-4">
@@ -498,7 +564,9 @@ function ManualGrammarWorkspace() {
                 Producciones
               </p>
               <p className="text-xs text-muted-foreground">
-                Puedes concatenar alternativas con <span className="font-mono">|</span>.
+                Puedes escribir reglas pegadas, por ejemplo <span className="font-mono">Aa</span>,{" "}
+                <span className="font-mono">0A</span> o separar alternativas con{" "}
+                <span className="font-mono">|</span>.
               </p>
             </div>
             <Button
@@ -506,7 +574,7 @@ function ManualGrammarWorkspace() {
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => setProductions((current) => [...current, { left: "", rule: "" }])}
+              onClick={() => setProductions((current) => [...current, createProductionDraft()])}
             >
               <Plus className="h-4 w-4" />
               Agregar
@@ -516,11 +584,13 @@ function ManualGrammarWorkspace() {
           <div className="mt-3 space-y-3">
             {productions.map((production, index) => (
               <ProductionRowEditor
-                key={`${index}-${production.left}-${production.rule}`}
+                key={production.id}
                 production={production}
                 onChange={(next) =>
                   setProductions((current) =>
-                    current.map((item, itemIndex) => (itemIndex === index ? next : item)),
+                    current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, ...next } : item,
+                    ),
                   )
                 }
                 onRemove={() =>
@@ -570,52 +640,6 @@ function ManualGrammarWorkspace() {
   );
 }
 
-function ThreadDiagramSection({ analysis }: { analysis: GrammarWordAnalysis }) {
-  const states = analysis.particularDerivation.map(
-    (step, index) => step.nextNonTerminal ?? (index === 0 ? step.sententialLabel : EPSILON_DISPLAY),
-  );
-  const symbols = analysis.particularDerivation
-    .slice(1)
-    .map((step) => step.consumedSymbol ?? EPSILON_DISPLAY);
-
-  return (
-    <section className="space-y-4 rounded-xl border bg-card p-4">
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Diagrama de hilos</p>
-        <p className="text-xs text-muted-foreground">
-          Resume cómo cambian los estados del autómata equivalente con cada símbolo consumido.
-        </p>
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border bg-gradient-to-r from-background to-background/70 p-5">
-        <div className="flex min-w-max items-start gap-6">
-          {states.map((state, index) => (
-            <div key={`${state}-${index}`} className="flex items-center gap-6">
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 font-mono text-sm font-semibold text-primary shadow-sm">
-                  {state}
-                </div>
-                <div className="rounded-lg border bg-card px-3 py-2 text-center text-xs text-muted-foreground">
-                  {index === 0 ? "[inicio]" : `[paso ${index}]`}
-                </div>
-              </div>
-
-              {index < states.length - 1 && (
-                <div className="flex flex-col items-center gap-2 pt-4">
-                  <div className="h-px w-12 bg-border" />
-                  <span className="rounded-full border bg-background px-3 py-1 font-mono text-xs text-foreground">
-                    {symbols[index]}
-                  </span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function AutomatonGrammarWorkspace({ data }: { data: AutomataData }) {
   const previewQuery = useQuery<GrammarAutomatonAnalysisResult>({
     queryKey: ["equivalent-grammar-preview", getTheorySnapshot(data)],
@@ -636,7 +660,7 @@ function AutomatonGrammarWorkspace({ data }: { data: AutomataData }) {
     return (
       <section className="rounded-xl border bg-card p-5">
         <p className="text-sm text-muted-foreground">
-          Dibuja un autómata para construir su gramática equivalente.
+          Dibuja un automata para construir su gramatica equivalente.
         </p>
       </section>
     );
@@ -645,31 +669,15 @@ function AutomatonGrammarWorkspace({ data }: { data: AutomataData }) {
   const validation = previewQuery.data?.validation;
   const grammar = validation?.grammar;
   const analysis = validateMutation.data?.analysis;
-  const validatedWord = validateMutation.variables ?? "";
+  const validatedWord = typeof validateMutation.variables === "string" ? validateMutation.variables : "";
 
   return (
     <div className="space-y-4">
-      {previewQuery.data && (
-        <section className="space-y-3 rounded-xl border bg-card p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">Reglas de transformación</p>
-          </div>
-
-          <div className="space-y-2">
-            {previewQuery.data.transformationRules.map((rule) => (
-              <div key={rule.title} className="rounded-lg border bg-background/40 p-3">
-                <p className="text-sm font-semibold text-foreground">{rule.title}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{rule.description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       <IssuesPanel messages={validation?.issues.map((issue) => issue.message) ?? []} />
 
       {grammar && (
         <>
+          <AutomatonTransformationSection grammar={grammar} />
           <FormalismSection grammar={grammar} />
           <GeneralTreeSection grammar={grammar} />
         </>
@@ -684,7 +692,6 @@ function AutomatonGrammarWorkspace({ data }: { data: AutomataData }) {
         <>
           <DerivationTreeSection analysis={analysis} />
           <DerivationSequenceSection steps={analysis.particularDerivation} />
-          <ThreadDiagramSection analysis={analysis} />
           <ConclusionSection analysis={analysis} wordInput={validatedWord} />
         </>
       )}
@@ -714,11 +721,11 @@ export function GrammarPanel({ data }: GrammarPanelProps) {
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="manual" className="gap-2">
                     <Sigma className="h-4 w-4" />
-                    Construir gramática
+                    Construir gramatica
                   </TabsTrigger>
                   <TabsTrigger value="automaton" className="gap-2">
                     <Workflow className="h-4 w-4" />
-                    Equivalencia desde autómata
+                    Equivalencia desde automata
                   </TabsTrigger>
                 </TabsList>
 

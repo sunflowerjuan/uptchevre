@@ -50,11 +50,49 @@ function parseProductionRule(rule: string) {
     .filter(Boolean);
 }
 
-function parseProductionAlternatives(rule: string) {
-  return rule
-    .split("|")
-    .map((alternative) => parseProductionRule(alternative))
-    .filter((tokens) => tokens.length > 0 || rule.split("|").some((part) => isEpsilonToken(part.trim()) || part.trim().length === 0));
+function tokenizeCompactRule(rule: string, knownSymbols: string[]) {
+  const trimmed = rule.trim();
+  if (!trimmed || isEpsilonToken(trimmed)) return [];
+
+  if (/\s/.test(trimmed)) {
+    return parseProductionRule(trimmed);
+  }
+
+  const symbols = Array.from(new Set(knownSymbols.filter(Boolean))).sort(
+    (a, b) => b.length - a.length || a.localeCompare(b),
+  );
+
+  if (symbols.length === 0) {
+    return trimmed.split("");
+  }
+
+  const tokens: string[] = [];
+  let cursor = 0;
+
+  while (cursor < trimmed.length) {
+    const match = symbols.find((symbol) => trimmed.startsWith(symbol, cursor));
+    if (!match) {
+      return trimmed.split("");
+    }
+
+    if (!isEpsilonToken(match)) {
+      tokens.push(match);
+    }
+    cursor += match.length;
+  }
+
+  return tokens;
+}
+
+function parseProductionAlternatives(rule: string, knownSymbols: string[]) {
+  return rule.split("|").map((alternative) => {
+    const trimmed = alternative.trim();
+    if (!trimmed || isEpsilonToken(trimmed)) {
+      return [];
+    }
+
+    return tokenizeCompactRule(trimmed, knownSymbols);
+  });
 }
 
 function hasOnlyKnownSymbols(tokens: string[], terminals: Set<string>, nonTerminals: Set<string>) {
@@ -440,21 +478,11 @@ function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, i
   };
 }
 
-function makeStateNonTerminal(label: string, taken: Set<string>) {
-  const normalized = label
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  const base = normalized || "S";
-  let candidate = base;
-  let index = 1;
-  while (taken.has(candidate)) {
-    candidate = `${base}_${index}`;
-    index += 1;
-  }
-  taken.add(candidate);
-  return candidate;
+function getIndexedLetter(index: number) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter((letter) => letter !== "S");
+  const base = alphabet[index % alphabet.length] ?? "A";
+  const cycle = Math.floor(index / alphabet.length);
+  return cycle === 0 ? base : `${base}${cycle}`;
 }
 
 function buildAutomatonProductions(
@@ -540,13 +568,14 @@ function buildAutomatonProductions(
 }
 
 function deriveStateMapping(automaton: AutomataData) {
-  const taken = new Set<string>();
   const nameMap = getStateNameMap(automaton);
+  const startStateId = automaton.states.find((state) => state.isInitial)?.id ?? automaton.states[0]?.id;
+  let otherStateIndex = 0;
 
   return automaton.states.map((state) => ({
     stateId: state.id,
     stateName: nameMap.get(state.id) ?? state.id,
-    nonTerminal: makeStateNonTerminal(nameMap.get(state.id) ?? state.id, taken),
+    nonTerminal: state.id === startStateId ? "S" : getIndexedLetter(otherStateIndex++),
     isInitial: state.isInitial,
     isAccept: state.isAccept,
   }));
@@ -634,9 +663,12 @@ export function analyzeManualGrammar(input: {
   productions: GrammarProductionInput[];
   word: string;
 }): GrammarManualAnalysisResult {
+  const terminals = parseSymbolList(input.terminals);
+  const nonTerminals = parseSymbolList(input.nonTerminals);
+  const knownSymbols = [...nonTerminals, ...terminals];
   const productions = input.productions
     .flatMap((production, index) =>
-      parseProductionAlternatives(production.rule).map((tokens, alternativeIndex) => ({
+      parseProductionAlternatives(production.rule, knownSymbols).map((tokens, alternativeIndex) => ({
         id: makeProductionId(production.left.trim(), tokens, index * 100 + alternativeIndex),
         left: production.left.trim(),
         rightTokens: tokens,
@@ -646,8 +678,8 @@ export function analyzeManualGrammar(input: {
     .filter((production) => production.left.length > 0);
 
   const validation = validateRegularGrammar({
-    terminals: parseSymbolList(input.terminals),
-    nonTerminals: parseSymbolList(input.nonTerminals),
+    terminals,
+    nonTerminals,
     startSymbol: input.startSymbol,
     productions,
     source: "manual",
