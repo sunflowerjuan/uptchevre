@@ -1,8 +1,8 @@
-import { ChevronLeft, ChevronRight, FileCode2, PlayCircle, Table2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileCode2, PlayCircle, Shuffle, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 
-export type SidebarModule = "simulator" | "formalism" | "both";
+export type SidebarModule = "simulator" | "formalism" | "both" | "conversion";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -16,6 +16,7 @@ const modules: { id: SidebarModule; label: string; icon: React.ElementType }[] =
   { id: "both", label: "Panel completo", icon: FileCode2 },
   { id: "simulator", label: "Simulador", icon: PlayCircle },
   { id: "formalism", label: "Formalismo", icon: Table2 },
+  { id: "conversion", label: "Transformación", icon: Shuffle },
 ];
 
 export function Sidebar({

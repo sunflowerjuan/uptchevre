@@ -116,10 +116,42 @@ export interface AutomataSimulationResult {
   rejectedPaths: SimulationPath[];
 }
 
+export interface TransformationTableRow {
+  dfaStateId: string;
+  dfaStateName: string;
+  nfaStateIds: string[];
+  nfaStateNames: string[];
+  transitions: {
+    symbol: string;
+    moveNfaStateNames: string[];
+    eClosureNfaStateNames: string[];
+    targetDfaStateId: string;
+    targetDfaStateName: string;
+  }[];
+  isInitial: boolean;
+  isAccept: boolean;
+}
+
+export interface NfaToDfaTransformationResult {
+  originalType: AutomatonType;
+  dfa: AutomataData;
+  transformationTable: TransformationTableRow[];
+  stateMapping: {
+    dfaStateId: string;
+    dfaStateName: string;
+    nfaStateIds: string[];
+    nfaStateNames: string[];
+  }[];
+}
+
 export async function analyzeAutomatonRequest(automaton: AutomataData) {
   return postJson<AutomataAnalysisResult>("/api/automata/analyze", { automaton });
 }
 
 export async function simulateAutomatonRequest(automaton: AutomataData, word: string) {
   return postJson<AutomataSimulationResult>("/api/automata/simulate", { automaton, word });
+}
+
+export async function transformNfaToDfaRequest(automaton: AutomataData) {
+  return postJson<NfaToDfaTransformationResult>("/api/automata/transform", { automaton });
 }

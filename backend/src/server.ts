@@ -3,6 +3,7 @@ import cors from "cors";
 import { analyzeAutomaton } from "./automata-analysis.js";
 import { areAutomataEquivalent } from "./automata-equivalence.js";
 import { simulateAutomaton } from "./automata-simulation.js";
+import { transformNfaToDfa } from "./automata-transformation.js";
 import type { AutomataData } from "./types.js";
 
 const app = express();
@@ -49,6 +50,21 @@ app.post("/api/automata/simulate", (req, res) => {
   res.json({ ok: true, result });
 });
 
+
+// convierte un AFND (NFA o NFA-ε) a un AFD por construcción de subconjuntos
+app.post("/api/automata/transform", (req, res) => {
+  const body = req.body as { automaton?: AutomataData };
+  if (!body?.automaton) {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata en el body.",
+    });
+    return;
+  }
+
+  const result = transformNfaToDfa(body.automaton);
+  res.json({ ok: true, result });
+});
 
 //compara dos DFA mediante producto de estados
 app.post("/api/automata/equivalent", (req, res) => {
