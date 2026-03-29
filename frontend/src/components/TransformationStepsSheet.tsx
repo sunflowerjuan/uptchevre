@@ -59,9 +59,6 @@ function StepTable({
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="px-2 py-1.5 text-left font-semibold text-primary">Estado</th>
-              <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">
-                Subconjunto AFND
-              </th>
               {alphabet.map((sym) => (
                 <th key={sym} className="px-2 py-1.5 text-center font-mono font-semibold">
                   {sym}
@@ -86,9 +83,6 @@ function StepTable({
                       {row.isAccept ? "*" : ""}
                     </span>
                     {fmt(row.nfaStateNames)}
-                  </td>
-                  <td className="px-2 py-1.5 font-mono text-muted-foreground whitespace-nowrap">
-                    {row.dfaStateName}
                   </td>
                   {isProcessed
                     ? row.transitions.map((t) => {
