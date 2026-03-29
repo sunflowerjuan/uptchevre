@@ -19,6 +19,35 @@ const SIGMA = "\u03a3";
 const DELTA = "\u03b4";
 const EPSILON = "\u03b5";
 
+function formatTargetsFormalism(
+  type: AutomataAnalysisResult["automatonType"],
+  targets: string[],
+): string {
+  if (targets.length === 0) return EMPTY_SET;
+  if (type === "DFA") return targets[0] ?? EMPTY_SET;
+  return `{${targets.join(", ")}}`;
+}
+
+function getTransitionDefinitionsNfa(
+  analysis: AutomataAnalysisResult,
+  transitionSymbols: string[],
+  grouped: Map<string, string[]>,
+) {
+  return analysis.states
+    .flatMap((state) =>
+      transitionSymbols.map((symbol) => ({
+        key: `${state.id}-${symbol}`,
+        stateName: state.name,
+        symbol,
+        value: formatTargetsFormalism(
+          analysis.automatonType,
+          grouped.get(`${state.name}::${symbol}`) ?? [],
+        ),
+      })),
+    )
+    .filter((def) => def.value !== EMPTY_SET);
+}
+
 function TypeBadge({ type }: { type: string }) {
   const label = type === "NFA_EPSILON" ? `NFA-${EPSILON}` : type;
   return (
@@ -30,12 +59,6 @@ function TypeBadge({ type }: { type: string }) {
 
 function NfaFormalism({ analysis }: { analysis: AutomataAnalysisResult }) {
   const typeLabel = analysis.automatonType === "NFA_EPSILON" ? `NFA-${EPSILON}` : analysis.automatonType;
-  const transitionFormula =
-    analysis.automatonType === "DFA"
-      ? `${DELTA}: Q \u00d7 ${SIGMA} \u2192 Q`
-      : analysis.automatonType === "NFA"
-      ? `${DELTA}: Q \u00d7 ${SIGMA} \u2192 2^Q`
-      : `${DELTA}: Q \u00d7 (${SIGMA} \u222a {${EPSILON}}) \u2192 2^Q`;
 
   const transitionSymbols =
     analysis.supportsEpsilon ? [...analysis.alphabet, EPSILON] : analysis.alphabet;
@@ -51,6 +74,11 @@ function NfaFormalism({ analysis }: { analysis: AutomataAnalysisResult }) {
   const q0Names = analysis.initialStates.map((s) => s.name);
   const q0Value = q0Names.length <= 1 ? (q0Names[0] ?? EMPTY_SET) : `{${q0Names.join(", ")}}`;
   const acceptNames = analysis.acceptStates.map((s) => s.name);
+  const transitionDefinitions = getTransitionDefinitionsNfa(
+    analysis,
+    transitionSymbols,
+    grouped,
+  );
 
   return (
     <section className="space-y-3 rounded-lg border bg-card p-3">
@@ -92,9 +120,27 @@ function NfaFormalism({ analysis }: { analysis: AutomataAnalysisResult }) {
       </div>
 
       {transitionSymbols.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="font-mono text-xs text-muted-foreground">{transitionFormula}</p>
-          <div className="overflow-x-auto rounded-lg border">
+        <div className="space-y-3">
+          {transitionDefinitions.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-sm font-semibold text-foreground">Función de transición</p>
+              <div className="space-y-1 rounded-lg border p-3 font-mono text-xs text-foreground">
+                <p>
+                  {DELTA} = {"{"}
+                </p>
+                {transitionDefinitions.map((def) => (
+                  <p key={def.key} className="pl-3">
+                    {`${DELTA}(${def.stateName}, ${def.symbol}) = ${def.value},`}
+                  </p>
+                ))}
+                <p>{"}"}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <p className="text-sm font-semibold text-foreground">Matriz de transición</p>
+            <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -136,6 +182,7 @@ function NfaFormalism({ analysis }: { analysis: AutomataAnalysisResult }) {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -153,6 +200,17 @@ function DfaFormalism({ result }: { result: NfaToDfaTransformationResult }) {
   const acceptLabels = stateMapping
     .filter((r) => dfa.states.find((s) => s.id === r.dfaStateId)?.isAccept)
     .map((r) => r.dfaStateName);
+
+  const dfaTransitionDefinitions = transformationTable
+    .flatMap((row) =>
+      row.transitions.map((t) => ({
+        key: `${row.dfaStateId}-${t.symbol}`,
+        stateName: row.dfaStateName,
+        symbol: t.symbol,
+        value: t.targetDfaStateName,
+      })),
+    )
+    .filter((def) => def.value !== EMPTY_SET);
 
   return (
     <section className="space-y-3 rounded-lg border bg-card p-3">
@@ -193,11 +251,27 @@ function DfaFormalism({ result }: { result: NfaToDfaTransformationResult }) {
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <p className="font-mono text-xs text-muted-foreground">
-          {DELTA}': Q' \u00d7 {SIGMA} \u2192 Q'
-        </p>
-        <div className="overflow-x-auto rounded-lg border">
+      <div className="space-y-3">
+        {dfaTransitionDefinitions.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-sm font-semibold text-foreground">Función de transición</p>
+            <div className="space-y-1 rounded-lg border p-3 font-mono text-xs text-foreground">
+              <p>
+                {DELTA}&apos; = {"{"}
+              </p>
+              {dfaTransitionDefinitions.map((def) => (
+                <p key={def.key} className="pl-3">
+                  {`${DELTA}'(${def.stateName}, ${def.symbol}) = ${def.value},`}
+                </p>
+              ))}
+              <p>{"}"}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <p className="text-sm font-semibold text-foreground">Matriz de transición</p>
+          <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -230,6 +304,7 @@ function DfaFormalism({ result }: { result: NfaToDfaTransformationResult }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </section>
