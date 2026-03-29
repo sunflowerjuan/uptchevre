@@ -7,6 +7,7 @@ import type { FormalismExportSection } from "@/components/ImportExportPanel";
 import { WorkArea } from "@/components/WorkArea";
 import { FormalismPanel } from "@/components/FormalismPanel";
 import { StringSimulator } from "@/components/StringSimulator";
+import { TransformationPanel } from "@/components/TransformationPanel";
 import { EditorToolbar } from "@/components/EditorToolbar";
 import { Header } from "@/layout/header";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
@@ -54,6 +55,16 @@ const Index = () => {
   const handleHighlight = useCallback((states: Set<string>) => {
     setHighlightedStates(states);
   }, []);
+
+  const handleLoadConvertedDfa = useCallback((dfa: AutomataData) => {
+    editor.loadAutomaton(dfa, { name: `${editor.documentName} (AFD)` });
+    setHighlightedStates(new Set());
+    setActiveModule("both");
+    toast({
+      title: "AFD cargado",
+      description: "El autómata determinista se cargó en el editor.",
+    });
+  }, [editor]);
 
   const handleLoadExample = useCallback((example: AutomataData, title: string) => {
     editor.loadAutomaton(example, { name: title });
@@ -396,6 +407,17 @@ const Index = () => {
                   analysis={analysisQuery.data}
                   isLoading={analysisQuery.isLoading}
                   error={analysisQuery.error instanceof Error ? analysisQuery.error.message : null}
+                />
+              </div>
+            )}
+
+            {activeModule === "conversion" && (
+              <div className="border-t">
+                <TransformationPanel
+                  data={editor.data}
+                  analysis={analysisQuery.data}
+                  analysisLoading={analysisQuery.isLoading}
+                  onLoadDfa={handleLoadConvertedDfa}
                 />
               </div>
             )}
