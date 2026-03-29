@@ -4,6 +4,7 @@ import type {
   GrammarAutomatonAnalysisResult,
   GrammarDefinition,
   GrammarDerivationStep,
+  GrammarLinearity,
   GrammarManualAnalysisResult,
   GrammarProduction,
   GrammarProductionInput,
@@ -49,6 +50,13 @@ function parseProductionRule(rule: string) {
     .filter(Boolean);
 }
 
+function parseProductionAlternatives(rule: string) {
+  return rule
+    .split("|")
+    .map((alternative) => parseProductionRule(alternative))
+    .filter((tokens) => tokens.length > 0 || rule.split("|").some((part) => isEpsilonToken(part.trim()) || part.trim().length === 0));
+}
+
 function hasOnlyKnownSymbols(tokens: string[], terminals: Set<string>, nonTerminals: Set<string>) {
   return tokens.every((token) => terminals.has(token) || nonTerminals.has(token));
 }
@@ -59,6 +67,11 @@ function arraysEqual(a: string[], b: string[]) {
 
 function isPrefix(prefix: string[], full: string[]) {
   return prefix.every((value, index) => full[index] === value);
+}
+
+function isSuffix(suffix: string[], full: string[]) {
+  if (suffix.length > full.length) return false;
+  return suffix.every((value, index) => full[full.length - suffix.length + index] === value);
 }
 
 function splitWord(word: string, terminals: string[]) {
@@ -82,6 +95,16 @@ function getTerminalPrefix(form: string[], nonTerminalSet: Set<string>) {
     prefix.push(token);
   }
   return prefix;
+}
+
+function getTerminalSuffix(form: string[], nonTerminalSet: Set<string>) {
+  const suffix: string[] = [];
+  for (let index = form.length - 1; index >= 0; index -= 1) {
+    const token = form[index]!;
+    if (nonTerminalSet.has(token)) break;
+    suffix.unshift(token);
+  }
+  return suffix;
 }
 
 function isTerminalForm(form: string[], nonTerminalSet: Set<string>) {
@@ -175,7 +198,9 @@ function buildThreadDiagramLines(steps: GrammarDerivationStep[]) {
   return [stateLine, labelLine, symbolLine];
 }
 
-function validateRegularGrammar(definition: Omit<GrammarDefinition, "source"> & { source?: GrammarSource }): GrammarValidationResult {
+function validateRegularGrammar(
+  definition: Omit<GrammarDefinition, "source" | "linearity"> & { source?: GrammarSource },
+): GrammarValidationResult {
   const issues: GrammarValidationIssue[] = [];
   const terminals = Array.from(new Set(definition.terminals.filter(Boolean)));
   const nonTerminals = Array.from(new Set(definition.nonTerminals.filter(Boolean)));
@@ -200,6 +225,7 @@ function validateRegularGrammar(definition: Omit<GrammarDefinition, "source"> & 
 
   const terminalSet = new Set(terminals);
   const nonTerminalSet = new Set(nonTerminals);
+  const seenLinearities = new Set<GrammarLinearity>();
 
   for (const production of productions) {
     if (!nonTerminalSet.has(production.left)) {
@@ -222,14 +248,56 @@ function validateRegularGrammar(definition: Omit<GrammarDefinition, "source"> & 
 
     if (nonTerminalPositions.length > 1) {
       issues.push({
-        message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} no es regular por la derecha.`,
+        message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} no es lineal.`,
       });
       continue;
     }
 
-    if (nonTerminalPositions.length === 1 && nonTerminalPositions[0] !== production.rightTokens.length - 1) {
+    if (nonTerminalPositions.length === 1) {
+      const position = nonTerminalPositions[0]!;
+
+      if (position === production.rightTokens.length - 1) {
+        seenLinearities.add("RIGHT");
+      } else if (position === 0) {
+        seenLinearities.add("LEFT");
+      } else {
+        issues.push({
+          message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} debe ser lineal derecha o lineal izquierda.`,
+        });
+      }
+    }
+  }
+
+  if (seenLinearities.size > 1) {
+    issues.push({
+      message: "No se puede mezclar lineal derecha con lineal izquierda en la misma gramatica.",
+    });
+  }
+
+  if (issues.length > 0) {
+    return { issues };
+  }
+
+  const linearity = seenLinearities.has("LEFT") ? "LEFT" : "RIGHT";
+
+  for (const production of productions) {
+    const nonTerminalPositions = production.rightTokens
+      .map((token, index) => (nonTerminalSet.has(token) ? index : -1))
+      .filter((index) => index >= 0);
+
+    if (
+      linearity === "RIGHT" &&
+      nonTerminalPositions.length === 1 &&
+      nonTerminalPositions[0] !== production.rightTokens.length - 1
+    ) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} debe dejar el no terminal al final.`,
+      });
+    }
+
+    if (linearity === "LEFT" && nonTerminalPositions.length === 1 && nonTerminalPositions[0] !== 0) {
+      issues.push({
+        message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} debe dejar el no terminal al inicio.`,
       });
     }
   }
@@ -245,6 +313,7 @@ function validateRegularGrammar(definition: Omit<GrammarDefinition, "source"> & 
       startSymbol,
       productions,
       source: definition.source ?? "manual",
+      linearity,
       stateMapping: definition.stateMapping,
       derivedFromAutomatonType: definition.derivedFromAutomatonType,
     },
@@ -255,6 +324,7 @@ function validateRegularGrammar(definition: Omit<GrammarDefinition, "source"> & 
 function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, includeThreadDiagram: boolean): GrammarWordAnalysis {
   const word = splitWord(wordInput, grammar.terminals);
   const nonTerminalSet = new Set(grammar.nonTerminals);
+  const isRightLinear = grammar.linearity === "RIGHT";
   const queue: Array<{
     id: string;
     depth: number;
@@ -279,13 +349,13 @@ function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, i
     const current = queue.shift()!;
     exploredNodes += 1;
 
-    const terminalPrefix = getTerminalPrefix(current.sententialForm, nonTerminalSet);
+    const terminalPrefix = isRightLinear
+      ? getTerminalPrefix(current.sententialForm, nonTerminalSet)
+      : getTerminalSuffix(current.sententialForm, nonTerminalSet);
     const terminal = isTerminalForm(current.sententialForm, nonTerminalSet);
     const accepted = terminal && arraysEqual(current.sententialForm, word);
     const producedTokens = current.viaProduction?.rightTokens ?? [];
-    const consumedSymbol = producedTokens.length > 0 && !nonTerminalSet.has(producedTokens[0]!)
-      ? producedTokens[0]!
-      : null;
+    const consumedSymbol = producedTokens.find((token) => !nonTerminalSet.has(token)) ?? null;
     const nextNonTerminal = producedTokens.find((token) => nonTerminalSet.has(token)) ?? null;
 
     const snapshot: GrammarDerivationStep = {
@@ -307,18 +377,24 @@ function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, i
     }
 
     if (current.depth >= maxDepth) continue;
-    if (!isPrefix(terminalPrefix, word)) continue;
+    if (isRightLinear && !isPrefix(terminalPrefix, word)) continue;
+    if (!isRightLinear && !isSuffix(terminalPrefix, word)) continue;
     if (terminal && !accepted) continue;
     if (terminalPrefix.length > word.length) continue;
 
-    const nextNonTerminalToExpand = current.sententialForm.find((token) => nonTerminalSet.has(token));
+    const nextNonTerminalToExpand = isRightLinear
+      ? current.sententialForm.find((token) => nonTerminalSet.has(token))
+      : [...current.sententialForm].reverse().find((token) => nonTerminalSet.has(token));
     if (!nextNonTerminalToExpand) continue;
 
     const candidates = grammar.productions.filter((production) => production.left === nextNonTerminalToExpand);
     for (const production of candidates) {
       const nextForm = replaceFirstNonTerminal(current.sententialForm, nonTerminalSet, production.rightTokens);
-      const nextPrefix = getTerminalPrefix(nextForm, nonTerminalSet);
-      if (!isPrefix(nextPrefix, word)) continue;
+      const nextPrefix = isRightLinear
+        ? getTerminalPrefix(nextForm, nonTerminalSet)
+        : getTerminalSuffix(nextForm, nonTerminalSet);
+      if (isRightLinear && !isPrefix(nextPrefix, word)) continue;
+      if (!isRightLinear && !isSuffix(nextPrefix, word)) continue;
 
       const stateKey = `${current.depth + 1}:${nextForm.join(" ")}`;
       if (visited.has(stateKey)) continue;
@@ -488,6 +564,7 @@ export function deriveGrammarFromAutomaton(automaton: AutomataData): GrammarDefi
     startSymbol,
     productions: buildAutomatonProductions(automaton, type, mapping),
     source: "automaton",
+    linearity: "RIGHT",
     stateMapping: mapping,
     derivedFromAutomatonType: type,
   };
@@ -558,12 +635,14 @@ export function analyzeManualGrammar(input: {
   word: string;
 }): GrammarManualAnalysisResult {
   const productions = input.productions
-    .map((production, index) => ({
-      id: makeProductionId(production.left.trim(), parseProductionRule(production.rule), index),
-      left: production.left.trim(),
-      rightTokens: parseProductionRule(production.rule),
-      source: "manual" as const,
-    }))
+    .flatMap((production, index) =>
+      parseProductionAlternatives(production.rule).map((tokens, alternativeIndex) => ({
+        id: makeProductionId(production.left.trim(), tokens, index * 100 + alternativeIndex),
+        left: production.left.trim(),
+        rightTokens: tokens,
+        source: "manual" as const,
+      })),
+    )
     .filter((production) => production.left.length > 0);
 
   const validation = validateRegularGrammar({
