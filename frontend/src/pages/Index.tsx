@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { useAutomataEditor } from "@/hooks/useAutomataEditor";
 import { ImportExportPanel } from "@/components/ImportExportPanel";
+import { GrammarPanel } from "@/components/GrammarPanel";
 import type { FormalismExportSection } from "@/components/ImportExportPanel";
 import { WorkArea } from "@/components/WorkArea";
 import { FormalismPanel } from "@/components/FormalismPanel";
@@ -319,34 +320,37 @@ const Index = () => {
           onToggle={() => setSidebarCollapsed((prev) => !prev)}
           onSelectModule={setActiveModule}
           footer={
-            <ImportExportPanel
-              documentName={editor.documentName}
-              onImportFile={(file) => void handleImportFile(file)}
-              onExportJkaut={handleExportJkaut}
-              onExportDiagramSvg={handleExportDiagramSvg}
-              onExportDiagramPng={(fileName) => void handleExportDiagramPng(fileName)}
-              onCopyDiagram={() => void handleCopyDiagram()}
-              onExportFormalismMarkdown={handleExportFormalismMarkdown}
-              onExportFormalismImage={(fileName, section) => void handleExportFormalismImage(fileName, section)}
-              onCopyFormalism={(section) => void handleCopyFormalism(section)}
-              onExportSimulationMarkdown={handleExportSimulationMarkdown}
-              onExportSimulationPdf={(fileName) => void handleExportSimulationPdf(fileName)}
-              recentDocuments={editor.recentDocuments}
-              onOpenRecent={handleOpenRecent}
-              canExportDiagram={editor.data.states.length > 0}
-              canExportFormalism={Boolean(
-                analysisQuery.data &&
-                  showFormalism &&
-                  (activeModule === "both" || activeModule === "formalism"),
-              )}
-              canExportSimulation={Boolean(
-                analysisQuery.data &&
-                  lastSimulation &&
-                  showSimulator &&
-                  (activeModule === "both" || activeModule === "simulator"),
-              )}
-              supportsEpsilon={Boolean(analysisQuery.data?.supportsEpsilon)}
-            />
+            <>
+              <GrammarPanel data={editor.data} />
+              <ImportExportPanel
+                documentName={editor.documentName}
+                onImportFile={(file) => void handleImportFile(file)}
+                onExportJkaut={handleExportJkaut}
+                onExportDiagramSvg={handleExportDiagramSvg}
+                onExportDiagramPng={(fileName) => void handleExportDiagramPng(fileName)}
+                onCopyDiagram={() => void handleCopyDiagram()}
+                onExportFormalismMarkdown={handleExportFormalismMarkdown}
+                onExportFormalismImage={(fileName, section) => void handleExportFormalismImage(fileName, section)}
+                onCopyFormalism={(section) => void handleCopyFormalism(section)}
+                onExportSimulationMarkdown={handleExportSimulationMarkdown}
+                onExportSimulationPdf={(fileName) => void handleExportSimulationPdf(fileName)}
+                recentDocuments={editor.recentDocuments}
+                onOpenRecent={handleOpenRecent}
+                canExportDiagram={editor.data.states.length > 0}
+                canExportFormalism={Boolean(
+                  analysisQuery.data &&
+                    showFormalism &&
+                    (activeModule === "both" || activeModule === "formalism"),
+                )}
+                canExportSimulation={Boolean(
+                  analysisQuery.data &&
+                    lastSimulation &&
+                    showSimulator &&
+                    (activeModule === "both" || activeModule === "simulator"),
+                )}
+                supportsEpsilon={Boolean(analysisQuery.data?.supportsEpsilon)}
+              />
+            </>
           }
         />
 
