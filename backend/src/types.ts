@@ -174,3 +174,80 @@ export interface NfaToDfaTransformationResult {
   }[];
 }
 
+export type GrammarSource = "manual" | "automaton";
+
+export interface GrammarProductionInput {
+  left: string;
+  rule: string;
+}
+
+export interface GrammarProduction {
+  id: string;
+  left: string;
+  rightTokens: string[];
+  source: GrammarSource;
+  note?: string;
+}
+
+export interface GrammarStateMapping {
+  stateId: string;
+  stateName: string;
+  nonTerminal: string;
+  isInitial: boolean;
+  isAccept: boolean;
+}
+
+export interface GrammarDefinition {
+  terminals: string[];
+  nonTerminals: string[];
+  startSymbol: string;
+  productions: GrammarProduction[];
+  source: GrammarSource;
+  stateMapping?: GrammarStateMapping[];
+  derivedFromAutomatonType?: AutomatonType;
+}
+
+export interface GrammarValidationIssue {
+  message: string;
+}
+
+export interface GrammarValidationResult {
+  grammar?: GrammarDefinition;
+  issues: GrammarValidationIssue[];
+}
+
+export interface GrammarDerivationStep {
+  id: string;
+  sententialForm: string[];
+  sententialLabel: string;
+  production?: GrammarProduction;
+  appliedNonTerminal?: string;
+  consumedSymbol?: string | null;
+  nextNonTerminal?: string | null;
+}
+
+export interface GrammarWordAnalysis {
+  word: string[];
+  accepted: boolean;
+  reason: string;
+  particularDerivation: GrammarDerivationStep[];
+  derivationTreeLines: string[];
+  threadDiagramLines: string[];
+}
+
+export interface GrammarTransformationRule {
+  title: string;
+  description: string;
+}
+
+export interface GrammarManualAnalysisResult {
+  validation: GrammarValidationResult;
+  analysis?: GrammarWordAnalysis;
+}
+
+export interface GrammarAutomatonAnalysisResult {
+  validation: GrammarValidationResult;
+  analysis?: GrammarWordAnalysis;
+  transformationRules: GrammarTransformationRule[];
+}
+

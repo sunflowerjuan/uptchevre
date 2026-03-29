@@ -4,7 +4,8 @@ import { analyzeAutomaton } from "./automata-analysis.js";
 import { areAutomataEquivalent } from "./automata-equivalence.js";
 import { simulateAutomaton } from "./automata-simulation.js";
 import { transformNfaToDfa } from "./automata-transformation.js";
-import type { AutomataData } from "./types.js";
+import { analyzeAutomatonEquivalentGrammar, analyzeManualGrammar } from "./grammar-analysis.js";
+import type { AutomataData, GrammarProductionInput } from "./types.js";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -78,6 +79,59 @@ app.post("/api/automata/equivalent", (req, res) => {
   }
 
   const result = areAutomataEquivalent(body.automatonA, body.automatonB);
+  res.json({ ok: true, result });
+});
+
+app.post("/api/grammar/manual", (req, res) => {
+  const body = req.body as {
+    terminals?: string[];
+    nonTerminals?: string[];
+    startSymbol?: string;
+    productions?: GrammarProductionInput[];
+    word?: string;
+  };
+
+  if (
+    !Array.isArray(body?.terminals) ||
+    !Array.isArray(body?.nonTerminals) ||
+    typeof body?.startSymbol !== "string" ||
+    !Array.isArray(body?.productions) ||
+    typeof body?.word !== "string"
+  ) {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar terminales, no terminales, simbolo inicial, producciones y palabra.",
+    });
+    return;
+  }
+
+  const result = analyzeManualGrammar({
+    terminals: body.terminals,
+    nonTerminals: body.nonTerminals,
+    startSymbol: body.startSymbol,
+    productions: body.productions,
+    word: body.word,
+  });
+
+  res.json({ ok: true, result });
+});
+
+app.post("/api/grammar/equivalent", (req, res) => {
+  const body = req.body as { automaton?: AutomataData; word?: string };
+
+  if (!body?.automaton || typeof body.word !== "string") {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata y la palabra a evaluar.",
+    });
+    return;
+  }
+
+  const result = analyzeAutomatonEquivalentGrammar({
+    automaton: body.automaton,
+    word: body.word,
+  });
+
   res.json({ ok: true, result });
 });
 
