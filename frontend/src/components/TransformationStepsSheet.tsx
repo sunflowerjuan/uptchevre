@@ -14,6 +14,7 @@ interface TransformationStepsSheetProps {
 }
 
 const EMPTY_SET = "\u2205";
+const INITIAL_ARROW = "\u2192";
 
 function fmt(names: string[]): string {
   if (names.length === 0) return EMPTY_SET;
@@ -81,7 +82,7 @@ function StepTable({
                 >
                   <td className="px-2 py-1.5 font-mono font-semibold whitespace-nowrap">
                     <span className="font-normal text-muted-foreground">
-                      {row.isInitial ? "\u2192" : ""}
+                      {row.isInitial ? INITIAL_ARROW : ""}
                       {row.isAccept ? "*" : ""}
                     </span>
                     {fmt(row.nfaStateNames)}
@@ -146,7 +147,7 @@ function FinalTable({ result }: { result: NfaToDfaTransformationResult }) {
               <tr key={row.dfaStateId} className="border-b last:border-0">
                 <td className="px-2 py-1.5 font-mono font-semibold whitespace-nowrap">
                   <span className="font-normal text-muted-foreground">
-                    {row.isInitial ? "\u2192" : ""}
+                    {row.isInitial ? INITIAL_ARROW : ""}
                     {row.isAccept ? "*" : ""}
                   </span>
                   {row.dfaStateName}
@@ -181,7 +182,9 @@ function MapeoTable({ result }: { result: NfaToDfaTransformationResult }) {
             <tr className="border-b bg-muted/50">
               <th className="px-2 py-1.5 text-left font-semibold text-primary">Estado AFD</th>
               <th className="px-2 py-1.5 text-left font-semibold">Subconjunto AFND</th>
-              <th className="px-2 py-1.5 text-center font-semibold">\u2192</th>
+              <th className="px-2 py-1.5 text-center font-semibold" title="Estado inicial">
+                {INITIAL_ARROW}
+              </th>
               <th className="px-2 py-1.5 text-center font-semibold">*</th>
             </tr>
           </thead>
@@ -196,7 +199,7 @@ function MapeoTable({ result }: { result: NfaToDfaTransformationResult }) {
                     {fmt(row.nfaStateNames)}
                   </td>
                   <td className="px-2 py-1.5 text-center text-muted-foreground">
-                    {isInitial ? "\u2192" : ""}
+                    {isInitial ? INITIAL_ARROW : ""}
                   </td>
                   <td className="px-2 py-1.5 text-center text-muted-foreground">
                     {isAccept ? "*" : ""}
