@@ -8,7 +8,10 @@ import type { FormalismExportSection } from "@/components/ImportExportPanel";
 import { WorkArea } from "@/components/WorkArea";
 import { FormalismPanel } from "@/components/FormalismPanel";
 import { StringSimulator } from "@/components/StringSimulator";
-import { TransformationPanel } from "@/components/TransformationPanel";
+import {
+  TransformationPanel,
+  type PersistedNfaToDfaState,
+} from "@/components/TransformationPanel";
 import { EditorToolbar } from "@/components/EditorToolbar";
 import { Header } from "@/layout/header";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
@@ -37,6 +40,9 @@ const Index = () => {
   const [showSimulator, setShowSimulator] = useState(true);
   const [showFormalism, setShowFormalism] = useState(true);
   const [lastSimulation, setLastSimulation] = useState<AutomataSimulationResult | null>(null);
+  /** Conserva AFN/AFD de la conversión al cambiar de módulo en la barra lateral (el panel se desmonta). */
+  const [persistedNfaToDfa, setPersistedNfaToDfa] = useState<PersistedNfaToDfaState | null>(null);
+  const [transformationView, setTransformationView] = useState<"nfa" | "dfa">("nfa");
   const workAreaContainerId = "uptchevere-workarea";
   const workAreaSvgId = "uptchevere-workarea-svg";
   const formalismExportId = "uptchevere-formalism-export";
@@ -55,6 +61,14 @@ const Index = () => {
 
   const handleHighlight = useCallback((states: Set<string>) => {
     setHighlightedStates(states);
+  }, []);
+
+  const handlePersistedNfaToDfaChange = useCallback((next: PersistedNfaToDfaState | null) => {
+    setPersistedNfaToDfa(next);
+  }, []);
+
+  const handleTransformationViewChange = useCallback((next: "nfa" | "dfa") => {
+    setTransformationView(next);
   }, []);
 
   const handleLoadConvertedDfa = useCallback((dfa: AutomataData) => {
@@ -421,6 +435,10 @@ const Index = () => {
                   analysis={analysisQuery.data}
                   analysisLoading={analysisQuery.isLoading}
                   onLoadDfa={handleLoadConvertedDfa}
+                  persistedNfaToDfa={persistedNfaToDfa}
+                  onPersistedNfaToDfaChange={handlePersistedNfaToDfaChange}
+                  transformationView={transformationView}
+                  onTransformationViewChange={handleTransformationViewChange}
                 />
               </div>
             )}
