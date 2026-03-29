@@ -174,12 +174,13 @@ function MapeoTable({ result }: { result: NfaToDfaTransformationResult }) {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b bg-muted/50">
-              <th className="px-2 py-1.5 text-left font-semibold text-primary">Estado AFD</th>
-              <th className="px-2 py-1.5 text-left font-semibold">Subconjunto AFND</th>
-              <th className="px-2 py-1.5 text-center font-semibold" title="Estado inicial">
-                {INITIAL_ARROW}
+              <th
+                className="px-2 py-1.5 text-left font-semibold text-primary"
+                title="Marcas junto al nombre: flecha = estado inicial, asterisco = estado final"
+              >
+                Estado AFD
               </th>
-              <th className="px-2 py-1.5 text-center font-semibold">*</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Subconjunto AFND</th>
             </tr>
           </thead>
           <tbody>
@@ -188,15 +189,15 @@ function MapeoTable({ result }: { result: NfaToDfaTransformationResult }) {
               const isAccept = result.dfa.states.find((s) => s.id === row.dfaStateId)?.isAccept;
               return (
                 <tr key={row.dfaStateId} className="border-b last:border-0">
-                  <td className="px-2 py-1.5 font-mono font-semibold">{row.dfaStateName}</td>
+                  <td className="px-2 py-1.5 font-mono font-semibold whitespace-nowrap">
+                    <span className="font-normal text-muted-foreground">
+                      {isInitial ? INITIAL_ARROW : ""}
+                      {isAccept ? "*" : ""}
+                    </span>
+                    {row.dfaStateName}
+                  </td>
                   <td className="px-2 py-1.5 font-mono text-muted-foreground">
                     {fmt(row.nfaStateNames)}
-                  </td>
-                  <td className="px-2 py-1.5 text-center text-muted-foreground">
-                    {isInitial ? INITIAL_ARROW : ""}
-                  </td>
-                  <td className="px-2 py-1.5 text-center text-muted-foreground">
-                    {isAccept ? "*" : ""}
                   </td>
                 </tr>
               );
