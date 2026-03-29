@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 import type { AutomataAnalysisResult, NfaToDfaTransformationResult } from "@/lib/automata-api";
 import { transformNfaToDfaRequest } from "@/lib/automata-api";
 import { TransformationStepsSheet } from "@/components/TransformationStepsSheet";
+import { getTheorySnapshot } from "@/lib/automata";
 
 interface TransformationPanelProps {
   data: AutomataData;
@@ -48,14 +49,6 @@ function getTransitionDefinitionsNfa(
     .filter((def) => def.value !== EMPTY_SET);
 }
 
-function TypeBadge({ type }: { type: string }) {
-  const label = type === "NFA_EPSILON" ? `NFA-${EPSILON}` : type;
-  return (
-    <span className="rounded border px-1.5 py-0.5 font-mono text-xs font-semibold text-primary">
-      {label}
-    </span>
-  );
-}
 
 function NfaFormalism({ analysis }: { analysis: AutomataAnalysisResult }) {
   const typeLabel = analysis.automatonType === "NFA_EPSILON" ? `NFA-${EPSILON}` : analysis.automatonType;
@@ -317,10 +310,52 @@ export function TransformationPanel({
   analysisLoading,
   onLoadDfa,
 }: TransformationPanelProps) {
-  const transformationMutation = useMutation({
-    mutationFn: () => transformNfaToDfaRequest(data),
-  });
+  const [view, setView] = useState<"nfa" | "dfa">("nfa");
   const [stepsOpen, setStepsOpen] = useState(false);
+  const [savedResult, setSavedResult] = useState<NfaToDfaTransformationResult | null>(null);
+  const [savedNfaAnalysis, setSavedNfaAnalysis] = useState<AutomataAnalysisResult | null>(null);
+  const [savedNfaData, setSavedNfaData] = useState<AutomataData | null>(null);
+  const [savedNfaKey, setSavedNfaKey] = useState<string | null>(null);
+
+  const enabled =
+    data.states.length > 0 &&
+    !analysisLoading &&
+    analysis !== undefined &&
+    analysis.automatonType !== "DFA";
+
+  const transformationQuery = useQuery({
+    queryKey: ["automata-transform", getTheorySnapshot(data)],
+    queryFn: () => transformNfaToDfaRequest(data),
+    enabled,
+    refetchOnWindowFocus: false,
+  });
+
+  // Persist result + NFA analysis when transformation completes
+  useEffect(() => {
+    if (transformationQuery.data && analysis && analysis.automatonType !== "DFA") {
+      setSavedResult(transformationQuery.data);
+      setSavedNfaAnalysis(analysis);
+      setSavedNfaData(data);
+      setSavedNfaKey(JSON.stringify(getTheorySnapshot(data)));
+    }
+  }, [transformationQuery.data]);
+
+  // Reset when the user edits the automaton (not when they just load the DFA)
+  useEffect(() => {
+    if (!savedNfaKey || !savedResult) return;
+    const currentKey = JSON.stringify(getTheorySnapshot(data));
+    const dfaKey = JSON.stringify(getTheorySnapshot(savedResult.dfa));
+    if (currentKey !== savedNfaKey && currentKey !== dfaKey) {
+      setSavedResult(null);
+      setSavedNfaAnalysis(null);
+      setSavedNfaData(null);
+      setSavedNfaKey(null);
+      setView("nfa");
+    }
+  }, [data]);
+
+  const effectiveNfaAnalysis = savedNfaAnalysis ?? analysis;
+  const effectiveResult = savedResult ?? transformationQuery.data ?? null;
 
   if (data.states.length === 0) {
     return (
@@ -340,57 +375,70 @@ export function TransformationPanel({
     );
   }
 
-  if (analysis?.automatonType === "DFA") {
+  // Already a DFA with no prior transformation to show
+  if (analysis?.automatonType === "DFA" && !savedResult) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-6">
-        <p className="text-center text-sm text-muted-foreground">
-          El autómata ya es un{" "}
-          <span className="font-mono font-semibold text-foreground">AFD</span>. No se necesita
-          transformación.
-        </p>
-      </div>
+      <ScrollArea className="h-full">
+        <div className="space-y-4 p-4">
+          <NfaFormalism analysis={analysis} />
+        </div>
+      </ScrollArea>
     );
   }
 
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4">
-        <section className="space-y-3 rounded-lg border bg-card p-3">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">AFND → AFD</p>
-            <p className="text-xs text-muted-foreground">Construcción de subconjuntos</p>
-          </div>
 
-          {analysis && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Tipo detectado:</span>
-              <TypeBadge type={analysis.automatonType} />
-            </div>
-          )}
-
+        <div className="flex gap-2">
           <Button
             size="sm"
-            className="w-full"
-            disabled={transformationMutation.isPending}
-            onClick={() => transformationMutation.mutate()}
+            variant={view === "nfa" ? "default" : "outline"}
+            className="flex-1"
+            onClick={() => setView("nfa")}
           >
-            {transformationMutation.isPending ? "Transformando..." : "Transformar a AFD"}
+            {effectiveNfaAnalysis?.automatonType === "NFA_EPSILON" ? "NFA-ε" : "NFA"}
           </Button>
+          <Button
+            size="sm"
+            variant={view === "dfa" ? "default" : "outline"}
+            className="flex-1"
+            disabled={!effectiveResult && transformationQuery.isPending}
+            onClick={() => setView("dfa")}
+          >
+            AFD
+          </Button>
+        </div>
 
-          {transformationMutation.isError && (
-            <p className="text-xs text-destructive">
-              {transformationMutation.error instanceof Error
-                ? transformationMutation.error.message
-                : "No fue posible completar la transformación."}
-            </p>
-          )}
-        </section>
+        {transformationQuery.isError && !savedResult && (
+          <p className="text-xs text-destructive">
+            {transformationQuery.error instanceof Error
+              ? transformationQuery.error.message
+              : "No fue posible completar la transformación."}
+          </p>
+        )}
 
-        {analysis && <NfaFormalism analysis={analysis} />}
-
-        {transformationMutation.data && (
+        {view === "nfa" && effectiveNfaAnalysis && (
           <>
-            <DfaFormalism result={transformationMutation.data} />
+            <NfaFormalism analysis={effectiveNfaAnalysis} />
+            {savedNfaData && JSON.stringify(getTheorySnapshot(data)) !== savedNfaKey && (
+              <div className="px-0 pb-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => onLoadDfa(savedNfaData)}
+                >
+                  Cargar NFA en el editor
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {view === "dfa" && effectiveResult && (
+          <>
+            <DfaFormalism result={effectiveResult} />
 
             <div className="flex flex-col gap-2 px-0 pb-2">
               <Button size="sm" className="w-full" onClick={() => setStepsOpen(true)}>
@@ -400,20 +448,26 @@ export function TransformationPanel({
                 size="sm"
                 variant="outline"
                 className="w-full"
-                onClick={() => onLoadDfa(transformationMutation.data!.dfa)}
+                onClick={() => onLoadDfa(effectiveResult.dfa)}
               >
                 Cargar AFD en el editor
               </Button>
             </div>
           </>
         )}
+
+        {view === "dfa" && !effectiveResult && (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-sm text-muted-foreground">Transformando...</p>
+          </div>
+        )}
       </div>
 
-      {transformationMutation.data && (
+      {effectiveResult && (
         <TransformationStepsSheet
           open={stepsOpen}
           onOpenChange={setStepsOpen}
-          result={transformationMutation.data}
+          result={effectiveResult}
         />
       )}
     </ScrollArea>
