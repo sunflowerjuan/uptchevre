@@ -145,6 +145,7 @@ export interface NfaToDfaTransformationResult {
 }
 
 export type GrammarSource = "manual" | "automaton";
+export type GrammarLinearity = "RIGHT" | "LEFT";
 
 export interface GrammarProductionInput {
   left: string;
@@ -173,6 +174,7 @@ export interface GrammarDefinition {
   startSymbol: string;
   productions: GrammarProduction[];
   source: GrammarSource;
+  linearity: GrammarLinearity;
   stateMapping?: GrammarStateMapping[];
   derivedFromAutomatonType?: AutomatonType;
 }
