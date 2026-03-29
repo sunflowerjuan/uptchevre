@@ -123,6 +123,8 @@ export interface TransformationTableRow {
   nfaStateNames: string[];
   transitions: {
     symbol: string;
+    moveNfaStateNames: string[];
+    eClosureNfaStateNames: string[];
     targetDfaStateId: string;
     targetDfaStateName: string;
   }[];

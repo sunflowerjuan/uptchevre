@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 import type { AutomataAnalysisResult, NfaToDfaTransformationResult } from "@/lib/automata-api";
 import { transformNfaToDfaRequest } from "@/lib/automata-api";
+import { TransformationStepsSheet } from "@/components/TransformationStepsSheet";
 
 interface TransformationPanelProps {
   data: AutomataData;
@@ -15,9 +17,10 @@ interface TransformationPanelProps {
 const EMPTY_SET = "\u2205";
 const SIGMA = "\u03a3";
 const DELTA = "\u03b4";
+const EPSILON = "\u03b5";
 
 function TypeBadge({ type }: { type: string }) {
-  const label = type === "NFA_EPSILON" ? "NFA-\u03b5" : type;
+  const label = type === "NFA_EPSILON" ? `NFA-${EPSILON}` : type;
   return (
     <span className="rounded border px-1.5 py-0.5 font-mono text-xs font-semibold text-primary">
       {label}
@@ -25,57 +28,123 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
-function MapeoTable({ result }: { result: NfaToDfaTransformationResult }) {
+function NfaFormalism({ analysis }: { analysis: AutomataAnalysisResult }) {
+  const typeLabel = analysis.automatonType === "NFA_EPSILON" ? `NFA-${EPSILON}` : analysis.automatonType;
+  const transitionFormula =
+    analysis.automatonType === "DFA"
+      ? `${DELTA}: Q \u00d7 ${SIGMA} \u2192 Q`
+      : analysis.automatonType === "NFA"
+      ? `${DELTA}: Q \u00d7 ${SIGMA} \u2192 2^Q`
+      : `${DELTA}: Q \u00d7 (${SIGMA} \u222a {${EPSILON}}) \u2192 2^Q`;
+
+  const transitionSymbols =
+    analysis.supportsEpsilon ? [...analysis.alphabet, EPSILON] : analysis.alphabet;
+
+  const grouped = new Map<string, string[]>();
+  for (const t of analysis.transitions) {
+    const key = `${t.fromName}::${t.displaySymbol}`;
+    const list = grouped.get(key) ?? [];
+    list.push(t.toName);
+    grouped.set(key, Array.from(new Set(list)).sort());
+  }
+
+  const q0Names = analysis.initialStates.map((s) => s.name);
+  const q0Value = q0Names.length <= 1 ? (q0Names[0] ?? EMPTY_SET) : `{${q0Names.join(", ")}}`;
+  const acceptNames = analysis.acceptStates.map((s) => s.name);
+
   return (
     <section className="space-y-3 rounded-lg border bg-card p-3">
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Mapeo de estados</p>
-        <p className="text-xs text-muted-foreground">
-          Correspondencia entre cada estado del AFD y el subconjunto de estados del AFND que
-          representa.
+        <p className="text-sm font-semibold text-foreground">{typeLabel}</p>
+        <p className="font-mono text-sm text-foreground">
+          M = (Q, {SIGMA}, {DELTA}, q₀, F)
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="px-3 py-2 text-left font-semibold text-primary">Estado AFD</th>
-              <th className="px-3 py-2 text-left font-semibold">Subconjunto AFND</th>
-              <th className="px-3 py-2 text-center font-semibold">→</th>
-              <th className="px-3 py-2 text-center font-semibold">*</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.stateMapping.map((row) => {
-              const subset =
-                row.nfaStateNames.length === 0
-                  ? EMPTY_SET
-                  : `{${row.nfaStateNames.join(", ")}}`;
-              const isInitial = result.dfa.states.find((s) => s.id === row.dfaStateId)?.isInitial;
-              const isAccept = result.dfa.states.find((s) => s.id === row.dfaStateId)?.isAccept;
-              return (
-                <tr key={row.dfaStateId} className="border-b last:border-0">
-                  <td className="px-3 py-2 font-mono font-semibold">{row.dfaStateName}</td>
-                  <td className="px-3 py-2 font-mono text-muted-foreground">{subset}</td>
-                  <td className="px-3 py-2 text-center text-muted-foreground">
-                    {isInitial ? "\u2192" : ""}
-                  </td>
-                  <td className="px-3 py-2 text-center text-muted-foreground">
-                    {isAccept ? "*" : ""}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="space-y-2 text-xs">
+        <div>
+          <span className="font-semibold text-primary">Q</span>
+          <span className="text-muted-foreground"> = {"{"}</span>
+          <span className="font-mono">{analysis.states.map((s) => s.name).join(", ")}</span>
+          <span className="text-muted-foreground">{"}"}</span>
+        </div>
+        <div>
+          <span className="font-semibold text-primary">{SIGMA}</span>
+          <span className="text-muted-foreground"> = {"{"}</span>
+          <span className="font-mono">
+            {analysis.alphabet.length > 0 ? analysis.alphabet.join(", ") : EMPTY_SET}
+          </span>
+          <span className="text-muted-foreground">{"}"}</span>
+        </div>
+        <div>
+          <span className="font-semibold text-primary">q₀</span>
+          <span className="text-muted-foreground"> = </span>
+          <span className="font-mono">{q0Value}</span>
+        </div>
+        <div>
+          <span className="font-semibold text-primary">F</span>
+          <span className="text-muted-foreground"> = {"{"}</span>
+          <span className="font-mono">
+            {acceptNames.length > 0 ? acceptNames.join(", ") : EMPTY_SET}
+          </span>
+          <span className="text-muted-foreground">{"}"}</span>
+        </div>
       </div>
+
+      {transitionSymbols.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="font-mono text-xs text-muted-foreground">{transitionFormula}</p>
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-3 py-2 text-left font-semibold text-primary">Estado</th>
+                  {transitionSymbols.map((sym) => (
+                    <th key={sym} className="px-3 py-2 text-center font-mono font-semibold">
+                      {sym}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.states.map((state) => (
+                  <tr key={state.id} className="border-b last:border-0">
+                    <td className="px-3 py-2 font-mono font-medium">
+                      {state.isInitial ? "\u2192" : ""}
+                      {state.isAccept ? "*" : ""}
+                      {state.name}
+                    </td>
+                    {transitionSymbols.map((sym) => {
+                      const targets = grouped.get(`${state.name}::${sym}`) ?? [];
+                      const cell =
+                        targets.length === 0
+                          ? EMPTY_SET
+                          : analysis.automatonType === "DFA"
+                          ? targets[0]!
+                          : `{${targets.join(", ")}}`;
+                      return (
+                        <td key={sym} className="px-3 py-2 text-center font-mono">
+                          {cell === EMPTY_SET ? (
+                            <span className="text-muted-foreground">{EMPTY_SET}</span>
+                          ) : (
+                            cell
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
-function FormalismoSection({ result }: { result: NfaToDfaTransformationResult }) {
-  const { dfa, stateMapping } = result;
+function DfaFormalism({ result }: { result: NfaToDfaTransformationResult }) {
+  const { dfa, stateMapping, transformationTable } = result;
 
   const allStateLabels = stateMapping.map((r) => r.dfaStateName);
   const initialState = dfa.states.find((s) => s.isInitial);
@@ -123,102 +192,31 @@ function FormalismoSection({ result }: { result: NfaToDfaTransformationResult })
           <span className="text-muted-foreground">{"}"}</span>
         </div>
       </div>
-    </section>
-  );
-}
 
-function MatrizTable({ result }: { result: NfaToDfaTransformationResult }) {
-  const { transformationTable, dfa } = result;
-  const alphabet = dfa.alphabet;
-
-  return (
-    <section className="space-y-3 rounded-lg border bg-card p-3">
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Matriz de transición</p>
+      <div className="space-y-1.5">
         <p className="font-mono text-xs text-muted-foreground">
-          {DELTA}': Q' × {SIGMA} → Q'
+          {DELTA}': Q' \u00d7 {SIGMA} \u2192 Q'
         </p>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="px-3 py-2 text-left font-semibold text-primary">Estado</th>
-              {alphabet.map((sym) => (
-                <th key={sym} className="px-3 py-2 text-center font-mono font-semibold">
-                  {sym}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {transformationTable.map((row) => (
-              <tr key={row.dfaStateId} className="border-b last:border-0">
-                <td className="px-3 py-2 font-mono font-medium">
-                  {row.isInitial ? "\u2192" : ""}
-                  {row.isAccept ? "*" : ""}
-                  {row.dfaStateName}
-                </td>
-                {row.transitions.map((t) => (
-                  <td key={t.symbol} className="px-3 py-2 text-center font-mono">
-                    {t.targetDfaStateName === EMPTY_SET ? (
-                      <span className="text-muted-foreground">{EMPTY_SET}</span>
-                    ) : (
-                      t.targetDfaStateName
-                    )}
-                  </td>
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="px-3 py-2 text-left font-semibold text-primary">Estado</th>
+                {dfa.alphabet.map((sym) => (
+                  <th key={sym} className="px-3 py-2 text-center font-mono font-semibold">
+                    {sym}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function TablaTransformacion({ result }: { result: NfaToDfaTransformationResult }) {
-  const { transformationTable, dfa } = result;
-  const alphabet = dfa.alphabet;
-
-  return (
-    <section className="space-y-3 rounded-lg border bg-card p-3">
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Tabla de transformación</p>
-        <p className="text-xs text-muted-foreground">
-          Construcción de subconjuntos: cada fila muestra el subconjunto AFND y las transiciones
-          del estado AFD resultante.
-        </p>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="px-3 py-2 text-left font-semibold text-primary">Estado</th>
-              <th className="px-3 py-2 text-left font-semibold">Subconjunto AFND</th>
-              {alphabet.map((sym) => (
-                <th key={sym} className="px-3 py-2 text-center font-mono font-semibold">
-                  {sym}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {transformationTable.map((row) => {
-              const subset =
-                row.nfaStateNames.length === 0
-                  ? EMPTY_SET
-                  : `{${row.nfaStateNames.join(", ")}}`;
-              return (
+            </thead>
+            <tbody>
+              {transformationTable.map((row) => (
                 <tr key={row.dfaStateId} className="border-b last:border-0">
                   <td className="px-3 py-2 font-mono font-medium">
                     {row.isInitial ? "\u2192" : ""}
                     {row.isAccept ? "*" : ""}
                     {row.dfaStateName}
                   </td>
-                  <td className="px-3 py-2 font-mono text-muted-foreground">{subset}</td>
                   {row.transitions.map((t) => (
                     <td key={t.symbol} className="px-3 py-2 text-center font-mono">
                       {t.targetDfaStateName === EMPTY_SET ? (
@@ -229,10 +227,10 @@ function TablaTransformacion({ result }: { result: NfaToDfaTransformationResult 
                     </td>
                   ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );
@@ -247,6 +245,7 @@ export function TransformationPanel({
   const transformationMutation = useMutation({
     mutationFn: () => transformNfaToDfaRequest(data),
   });
+  const [stepsOpen, setStepsOpen] = useState(false);
 
   if (data.states.length === 0) {
     return (
@@ -284,9 +283,7 @@ export function TransformationPanel({
         <section className="space-y-3 rounded-lg border bg-card p-3">
           <div className="space-y-1">
             <p className="text-sm font-semibold text-foreground">AFND → AFD</p>
-            <p className="text-xs text-muted-foreground">
-              Construcción de subconjuntos
-            </p>
+            <p className="text-xs text-muted-foreground">Construcción de subconjuntos</p>
           </div>
 
           {analysis && (
@@ -314,28 +311,16 @@ export function TransformationPanel({
           )}
         </section>
 
+        {analysis && <NfaFormalism analysis={analysis} />}
+
         {transformationMutation.data && (
           <>
-            <section className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">
-              <TypeBadge type={transformationMutation.data.originalType} />
-              <span>→</span>
-              <TypeBadge type="DFA" />
-              <span className="ml-auto">
-                <span className="font-semibold text-foreground">{data.states.length}</span>{" "}
-                estados originales →{" "}
-                <span className="font-semibold text-foreground">
-                  {transformationMutation.data.dfa.states.length}
-                </span>{" "}
-                estados en el AFD
-              </span>
-            </section>
+            <DfaFormalism result={transformationMutation.data} />
 
-            <MapeoTable result={transformationMutation.data} />
-            <FormalismoSection result={transformationMutation.data} />
-            <MatrizTable result={transformationMutation.data} />
-            <TablaTransformacion result={transformationMutation.data} />
-
-            <div className="px-0 pb-2">
+            <div className="flex flex-col gap-2 px-0 pb-2">
+              <Button size="sm" className="w-full" onClick={() => setStepsOpen(true)}>
+                Mostrar paso a paso
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -348,6 +333,14 @@ export function TransformationPanel({
           </>
         )}
       </div>
+
+      {transformationMutation.data && (
+        <TransformationStepsSheet
+          open={stepsOpen}
+          onOpenChange={setStepsOpen}
+          result={transformationMutation.data}
+        />
+      )}
     </ScrollArea>
   );
 }

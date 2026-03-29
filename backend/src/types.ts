@@ -149,6 +149,8 @@ export interface TransformationTableRow {
   nfaStateNames: string[];
   transitions: {
     symbol: string;
+    moveNfaStateNames: string[];   // resultado de MOVE(estado, símbolo) antes de ε-clausura
+    eClosureNfaStateNames: string[]; // resultado tras aplicar ε-clausura al MOVE
     targetDfaStateId: string;
     targetDfaStateName: string;
   }[];

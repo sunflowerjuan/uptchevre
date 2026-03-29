@@ -57,6 +57,8 @@ export function transformNfaToDfa(nfa: AutomataData): NfaToDfaTransformationResu
   dfaStatesMap.set(initialKey, initialClosure);
 
   const dfaDelta = new Map<string, Map<string, string>>();
+  // dfaMoveSets: clave_origen → (símbolo → { move: ids antes de ε-clausura, closure: ids tras ε-clausura })
+  const dfaMoveSets = new Map<string, Map<string, { move: Set<string>; closure: Set<string> }>>();
 
   const worklist: string[] = [initialKey];
   const visited = new Set<string>();
@@ -68,10 +70,13 @@ export function transformNfaToDfa(nfa: AutomataData): NfaToDfaTransformationResu
 
     const currentSet = dfaStatesMap.get(currentKey)!;
     const symbolMap = new Map<string, string>();
+    const moveMap = new Map<string, { move: Set<string>; closure: Set<string> }>();
 
     for (const symbol of alphabet) {
       const moved = move(nfa, currentSet, symbol);
       const T = moved.size > 0 ? epsilonClosure(nfa, moved) : new Set<string>();
+
+      moveMap.set(symbol, { move: moved, closure: T });
 
       if (T.size > 0) {
         const targetKey = setKey(T);
@@ -84,6 +89,7 @@ export function transformNfaToDfa(nfa: AutomataData): NfaToDfaTransformationResu
     }
 
     dfaDelta.set(currentKey, symbolMap);
+    dfaMoveSets.set(currentKey, moveMap);
   }
 
   const orderedKeys = [
@@ -145,8 +151,13 @@ export function transformNfaToDfa(nfa: AutomataData): NfaToDfaTransformationResu
       nfaStateNames: nfaIds.map((id) => nameMap.get(id) ?? id),
       transitions: alphabet.map((symbol) => {
         const targetKey = symbolMap.get(symbol);
+        const moveSets = dfaMoveSets.get(key)?.get(symbol);
+        const moveIds = moveSets ? Array.from(moveSets.move).sort() : [];
+        const closureIds = moveSets ? Array.from(moveSets.closure).sort() : [];
         return {
           symbol,
+          moveNfaStateNames: moveIds.map((id) => nameMap.get(id) ?? id),
+          eClosureNfaStateNames: closureIds.map((id) => nameMap.get(id) ?? id),
           targetDfaStateId: targetKey ? keyToId.get(targetKey)! : "",
           targetDfaStateName: targetKey ? keyToLabel.get(targetKey)! : "\u2205",
         };
