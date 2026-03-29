@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,23 @@ import { transformNfaToDfaRequest } from "@/lib/automata-api";
 import { TransformationStepsSheet } from "@/components/TransformationStepsSheet";
 import { getTheorySnapshot } from "@/lib/automata";
 
+/** Estado que vive en el padre para no perder la conversión al cambiar de módulo en la barra lateral. */
+export type PersistedNfaToDfaState = {
+  savedResult: NfaToDfaTransformationResult;
+  savedNfaAnalysis: AutomataAnalysisResult;
+  savedNfaData: AutomataData;
+  savedNfaKey: string;
+};
+
 interface TransformationPanelProps {
   data: AutomataData;
   analysis?: AutomataAnalysisResult;
   analysisLoading: boolean;
   onLoadDfa: (dfa: AutomataData) => void;
+  persistedNfaToDfa: PersistedNfaToDfaState | null;
+  onPersistedNfaToDfaChange: (next: PersistedNfaToDfaState | null) => void;
+  transformationView: "nfa" | "dfa";
+  onTransformationViewChange: (next: "nfa" | "dfa") => void;
 }
 
 const EMPTY_SET = "\u2205";
@@ -309,14 +321,12 @@ export function TransformationPanel({
   analysis,
   analysisLoading,
   onLoadDfa,
+  persistedNfaToDfa,
+  onPersistedNfaToDfaChange,
+  transformationView: view,
+  onTransformationViewChange: setView,
 }: TransformationPanelProps) {
-  const [view, setView] = useState<"nfa" | "dfa" | "both">("nfa");
-  const hadEffectiveResultRef = useRef(false);
   const [stepsOpen, setStepsOpen] = useState(false);
-  const [savedResult, setSavedResult] = useState<NfaToDfaTransformationResult | null>(null);
-  const [savedNfaAnalysis, setSavedNfaAnalysis] = useState<AutomataAnalysisResult | null>(null);
-  const [savedNfaData, setSavedNfaData] = useState<AutomataData | null>(null);
-  const [savedNfaKey, setSavedNfaKey] = useState<string | null>(null);
 
   const enabled =
     data.states.length > 0 &&
@@ -331,52 +341,57 @@ export function TransformationPanel({
     refetchOnWindowFocus: false,
   });
 
-  // Persist result + NFA analysis when transformation completes
+  // Persistir en el padre cuando termina la transformación (solo AFN en el editor).
   useEffect(() => {
-    if (transformationQuery.data && analysis && analysis.automatonType !== "DFA") {
-      setSavedResult(transformationQuery.data);
-      setSavedNfaAnalysis(analysis);
-      setSavedNfaData(data);
-      setSavedNfaKey(JSON.stringify(getTheorySnapshot(data)));
+    if (!transformationQuery.data || !analysis || analysis.automatonType === "DFA") return;
+    const nextKey = JSON.stringify(getTheorySnapshot(data));
+    const next: PersistedNfaToDfaState = {
+      savedResult: transformationQuery.data,
+      savedNfaAnalysis: analysis,
+      savedNfaData: data,
+      savedNfaKey: nextKey,
+    };
+    if (
+      persistedNfaToDfa &&
+      persistedNfaToDfa.savedResult === next.savedResult &&
+      persistedNfaToDfa.savedNfaKey === next.savedNfaKey
+    ) {
+      return;
     }
-  }, [transformationQuery.data]);
+    const wasEmpty = !persistedNfaToDfa;
+    onPersistedNfaToDfaChange(next);
+    if (wasEmpty) {
+      setView("dfa");
+    }
+  }, [
+    transformationQuery.data,
+    analysis,
+    data,
+    persistedNfaToDfa,
+    onPersistedNfaToDfaChange,
+    setView,
+  ]);
 
-  // Reset when the user edits the automaton (not when they just load the DFA)
+  // Borrar conversión guardada si el autómata del editor deja de coincidir (AFN editado u otro documento).
   useEffect(() => {
-    if (!savedNfaKey || !savedResult) return;
+    if (!persistedNfaToDfa?.savedNfaKey || !persistedNfaToDfa.savedResult) return;
     const currentKey = JSON.stringify(getTheorySnapshot(data));
-    const dfaKey = JSON.stringify(getTheorySnapshot(savedResult.dfa));
-    if (currentKey !== savedNfaKey && currentKey !== dfaKey) {
-      setSavedResult(null);
-      setSavedNfaAnalysis(null);
-      setSavedNfaData(null);
-      setSavedNfaKey(null);
+    const dfaKey = JSON.stringify(getTheorySnapshot(persistedNfaToDfa.savedResult.dfa));
+    if (currentKey !== persistedNfaToDfa.savedNfaKey && currentKey !== dfaKey) {
+      onPersistedNfaToDfaChange(null);
       setView("nfa");
     }
-  }, [data]);
+  }, [data, persistedNfaToDfa, onPersistedNfaToDfaChange, setView]);
+
+  const savedNfaAnalysis = persistedNfaToDfa?.savedNfaAnalysis ?? null;
+  const savedNfaData = persistedNfaToDfa?.savedNfaData ?? null;
+  const savedNfaKey = persistedNfaToDfa?.savedNfaKey ?? null;
+  const savedResult = persistedNfaToDfa?.savedResult ?? null;
 
   const effectiveNfaAnalysis = savedNfaAnalysis ?? analysis;
   const effectiveResult = savedResult ?? transformationQuery.data ?? null;
   const isEditorDfaWithoutConversion =
     analysis?.automatonType === "DFA" && !effectiveResult;
-
-  // Tras la primera conversión, mostrar AFN + AFD juntos sin salir del panel.
-  useEffect(() => {
-    if (effectiveResult) {
-      if (!hadEffectiveResultRef.current) {
-        setView("both");
-        hadEffectiveResultRef.current = true;
-      }
-    } else {
-      hadEffectiveResultRef.current = false;
-    }
-  }, [effectiveResult]);
-
-  useEffect(() => {
-    if (!effectiveResult && view === "both") {
-      setView("nfa");
-    }
-  }, [effectiveResult, view]);
 
   if (data.states.length === 0) {
     return (
@@ -411,20 +426,6 @@ export function TransformationPanel({
           </Button>
           <Button
             size="sm"
-            variant={view === "both" ? "default" : "outline"}
-            className="min-w-0 flex-1"
-            disabled={!effectiveResult}
-            onClick={() => setView("both")}
-            title={
-              effectiveResult
-                ? "Ver AFN de entrada y AFD resultante"
-                : "Disponible cuando exista una conversión"
-            }
-          >
-            Ambos
-          </Button>
-          <Button
-            size="sm"
             variant={view === "dfa" ? "default" : "outline"}
             className="min-w-0 flex-1"
             onClick={() => setView("dfa")}
@@ -433,7 +434,7 @@ export function TransformationPanel({
           </Button>
         </div>
 
-        {transformationQuery.isError && !savedResult && (
+        {transformationQuery.isError && !effectiveResult && (
           <p className="text-xs text-destructive">
             {transformationQuery.error instanceof Error
               ? transformationQuery.error.message
@@ -441,13 +442,8 @@ export function TransformationPanel({
           </p>
         )}
 
-        {(view === "nfa" || view === "both") && effectiveNfaAnalysis && (
+        {view === "nfa" && effectiveNfaAnalysis && (
           <>
-            {view === "both" && effectiveResult && (
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Entrada (AFN)
-              </p>
-            )}
             <NfaFormalism analysis={effectiveNfaAnalysis} />
             {savedNfaData && JSON.stringify(getTheorySnapshot(data)) !== savedNfaKey && (
               <div className="px-0 pb-2">
@@ -464,13 +460,8 @@ export function TransformationPanel({
           </>
         )}
 
-        {(view === "dfa" || view === "both") && effectiveResult && (
+        {view === "dfa" && effectiveResult && (
           <>
-            {view === "both" && (
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Resultado (AFD)
-              </p>
-            )}
             <DfaFormalism result={effectiveResult} />
 
             <div className="flex flex-col gap-2 px-0 pb-2">
@@ -489,7 +480,7 @@ export function TransformationPanel({
           </>
         )}
 
-        {(view === "dfa" || view === "both") && !effectiveResult && (
+        {view === "dfa" && !effectiveResult && (
           <>
             {transformationQuery.isPending && (
               <div className="flex items-center justify-center py-8">
