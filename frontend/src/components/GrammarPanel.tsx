@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { PanelRightOpen, Plus, Sigma, Trash2, Workflow } from "lucide-react";
+import { Clipboard, Download, Minus, PanelRightOpen, Plus, RotateCcw, Sigma, Trash2, Workflow } from "lucide-react";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   Sheet,
   SheetContent,
@@ -24,20 +25,62 @@ import {
   type GrammarWordAnalysis,
 } from "@/lib/automata-api";
 import { EPSILON_DISPLAY, getTheorySnapshot } from "@/lib/automata";
+import { copySvgElementAsPngToClipboard, exportSvgElementAsSvg } from "@/lib/automata-export";
+import { toast } from "@/hooks/use-toast";
 
 interface GrammarPanelProps {
   data: AutomataData;
+  strictGrammarRules: boolean;
 }
 
 interface GeneralTreeNode {
   id: string;
   label: string;
-  type: "nonTerminal" | "production";
+  tokens: string[];
   children: GeneralTreeNode[];
+  isPendingLeaf: boolean;
+  isTerminalLeaf: boolean;
+}
+
+interface GeneralTreeBuildResult {
+  root: GeneralTreeNode;
+  isInfinite: boolean;
+  maxDepth: number | null;
+}
+
+interface PositionedTreeNode {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isPendingLeaf: boolean;
+  isTerminalLeaf: boolean;
+}
+
+interface TreeEdge {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+}
+
+interface TreeLayout {
+  width: number;
+  height: number;
+  nodes: PositionedTreeNode[];
+  edges: TreeEdge[];
 }
 
 interface ProductionDraft extends GrammarProductionInput {
   id: string;
+}
+
+interface ManualGrammarDraftState {
+  terminalsInput: string;
+  nonTerminalsInput: string;
+  productions: ProductionDraft[];
 }
 
 function createProductionDraft(): ProductionDraft {
@@ -45,6 +88,14 @@ function createProductionDraft(): ProductionDraft {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     left: "",
     rule: "",
+  };
+}
+
+function createManualGrammarDraftState(): ManualGrammarDraftState {
+  return {
+    terminalsInput: "",
+    nonTerminalsInput: "",
+    productions: [createProductionDraft()],
   };
 }
 
@@ -76,39 +127,173 @@ function groupProductions(grammar: GrammarDefinition) {
     .filter((group) => group.productions.length > 0);
 }
 
-function buildGeneralTree(grammar: GrammarDefinition): GeneralTreeNode {
-  const grouped = new Map(
-    groupProductions(grammar).map((entry) => [entry.nonTerminal, entry.productions]),
+function findFirstNonTerminalIndex(tokens: string[], nonTerminalSet: Set<string>) {
+  return tokens.findIndex((token) => nonTerminalSet.has(token));
+}
+
+function hasReachableRecursion(grammar: GrammarDefinition) {
+  const adjacency = new Map<string, string[]>();
+
+  grammar.productions.forEach((production) => {
+    const next = production.rightTokens.filter((token) => grammar.nonTerminals.includes(token));
+    adjacency.set(production.left, [...(adjacency.get(production.left) ?? []), ...next]);
+  });
+
+  const visited = new Set<string>();
+  const active = new Set<string>();
+
+  const visit = (symbol: string): boolean => {
+    if (active.has(symbol)) return true;
+    if (visited.has(symbol)) return false;
+
+    visited.add(symbol);
+    active.add(symbol);
+
+    for (const next of adjacency.get(symbol) ?? []) {
+      if (visit(next)) return true;
+    }
+
+    active.delete(symbol);
+    return false;
+  };
+
+  return visit(grammar.startSymbol);
+}
+
+function buildGeneralTree(grammar: GrammarDefinition): GeneralTreeBuildResult {
+  const productionsByLeft = new Map(
+    grammar.nonTerminals.map((nonTerminal) => [
+      nonTerminal,
+      grammar.productions.filter((production) => production.left === nonTerminal),
+    ]),
   );
-  const visitCounter = new Map<string, number>();
+  const nonTerminalSet = new Set(grammar.nonTerminals);
+  const isInfinite = hasReachableRecursion(grammar);
+  const maxDepth = isInfinite ? 5 : null;
 
-  const visit = (nonTerminal: string, depth: number): GeneralTreeNode => {
-    const count = (visitCounter.get(nonTerminal) ?? 0) + 1;
-    visitCounter.set(nonTerminal, count);
+  const visit = (tokens: string[], depth: number, id: string): GeneralTreeNode => {
+    const nextIndex = findFirstNonTerminalIndex(tokens, nonTerminalSet);
+    const isTerminalLeaf = nextIndex < 0;
+    const isPendingLeaf = !isTerminalLeaf && maxDepth !== null && depth >= maxDepth;
 
-    const productions = grouped.get(nonTerminal) ?? [];
-    const canExpand = depth < 4 && count <= 2;
+    if (isTerminalLeaf || isPendingLeaf) {
+      return {
+        id,
+        label: formatRule(tokens),
+        tokens,
+        children: [],
+        isPendingLeaf,
+        isTerminalLeaf,
+      };
+    }
+
+    const target = tokens[nextIndex]!;
+    const prefix = tokens.slice(0, nextIndex);
+    const suffix = tokens.slice(nextIndex + 1);
+    const children = (productionsByLeft.get(target) ?? []).map((production, index) =>
+      visit(
+        [...prefix, ...production.rightTokens, ...suffix],
+        depth + 1,
+        `${id}-${production.id}-${index}`,
+      ),
+    );
 
     return {
-      id: `nt-${nonTerminal}-${depth}-${count}`,
-      label: nonTerminal,
-      type: "nonTerminal",
-      children: productions.map((production, index) => {
-        const nextNonTerminal = production.rightTokens.find((token) =>
-          grammar.nonTerminals.includes(token),
-        );
-
-        return {
-          id: `prod-${production.id}-${index}`,
-          label: formatRule(production.rightTokens),
-          type: "production",
-          children: canExpand && nextNonTerminal ? [visit(nextNonTerminal, depth + 1)] : [],
-        };
-      }),
+      id,
+      label: formatRule(tokens),
+      tokens,
+      children,
+      isPendingLeaf: false,
+      isTerminalLeaf: false,
     };
   };
 
-  return visit(grammar.startSymbol, 0);
+  return {
+    root: visit([grammar.startSymbol], 0, "root"),
+    isInfinite,
+    maxDepth,
+  };
+}
+
+function getNodeWidth(label: string) {
+  const baseWidth = 160;
+  const dynamicWidth = label.length <= 10
+    ? label.length * 14 + 64
+    : label.length <= 24
+      ? label.length * 16 + 72
+      : label.length * 18 + 96;
+
+  return Math.max(baseWidth, dynamicWidth);
+}
+
+function buildTreeLayout(root: GeneralTreeNode): TreeLayout {
+  const nodeHeight = 42;
+  const siblingGap = 24;
+  const levelGap = 84;
+  const nodes: PositionedTreeNode[] = [];
+  const edges: TreeEdge[] = [];
+
+  const measure = (node: GeneralTreeNode): number => {
+    const ownWidth = getNodeWidth(node.label);
+    if (node.children.length === 0) return ownWidth;
+
+    const childrenWidth =
+      node.children.reduce((sum, child) => sum + measure(child), 0) +
+      siblingGap * Math.max(0, node.children.length - 1);
+
+    return Math.max(ownWidth, childrenWidth);
+  };
+
+  const place = (
+    node: GeneralTreeNode,
+    left: number,
+    top: number,
+  ): { width: number; centerX: number; bottomY: number } => {
+    const ownWidth = getNodeWidth(node.label);
+    const childWidths = node.children.map((child) => measure(child));
+    const totalChildrenWidth =
+      childWidths.reduce((sum, width) => sum + width, 0) +
+      siblingGap * Math.max(0, childWidths.length - 1);
+    const subtreeWidth = Math.max(ownWidth, totalChildrenWidth);
+    const x = left + subtreeWidth / 2 - ownWidth / 2;
+    const centerX = x + ownWidth / 2;
+
+    nodes.push({
+      id: node.id,
+      label: node.label,
+      x,
+      y: top,
+      width: ownWidth,
+      height: nodeHeight,
+      isPendingLeaf: node.isPendingLeaf,
+      isTerminalLeaf: node.isTerminalLeaf,
+    });
+
+    let currentLeft = left + (subtreeWidth - totalChildrenWidth) / 2;
+    let bottomY = top + nodeHeight;
+
+    node.children.forEach((child, index) => {
+      const childLayout = place(child, currentLeft, top + nodeHeight + levelGap);
+      edges.push({
+        fromX: centerX,
+        fromY: top + nodeHeight,
+        toX: childLayout.centerX,
+        toY: top + nodeHeight + levelGap,
+      });
+      currentLeft += childWidths[index]! + siblingGap;
+      bottomY = Math.max(bottomY, childLayout.bottomY);
+    });
+
+    return { width: subtreeWidth, centerX, bottomY };
+  };
+
+  const result = place(root, 24, 24);
+  return {
+    width: result.width + 48,
+    height: result.bottomY + 32,
+    nodes,
+    edges,
+  };
 }
 
 function FormalismSet({ label, value }: { label: string; value: string }) {
@@ -169,139 +354,384 @@ function AutomatonTransformationSection({ grammar }: { grammar: GrammarDefinitio
       <div className="space-y-1">
         <p className="text-sm font-semibold text-foreground">Transformacion desde automata</p>
         <p className="text-xs text-muted-foreground">
-          Primero se renombran los estados, luego las transiciones se vuelven reglas y al final queda la gramatica equivalente.
+          Primero se renombran los estados, luego las transiciones se vuelven reglas y, si aplica, los estados finales producen {EPSILON_DISPLAY}.
         </p>
       </div>
 
-      <div className="rounded-xl border bg-background/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          1. Estados a simbolos
-        </p>
-        <div className="mt-3 grid gap-2">
-          {stateMapping.map((item) => (
-            <p key={item.stateId} className="rounded-lg border bg-card p-3 font-mono text-sm text-foreground">
-              {item.stateName} → {item.nonTerminal}
-              {item.isInitial ? " [inicial]" : ""}
-              {item.isAccept ? " [final]" : ""}
-            </p>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-background/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          2. Funciones a reglas
-        </p>
-        <div className="mt-3 space-y-2">
-          {transitionProductions.map((production) => {
-            const terminal = production.rightTokens[0] ?? "";
-            const targetNonTerminal = production.rightTokens[1] ?? "";
-            const fromState = stateNameByNonTerminal.get(production.left) ?? production.left;
-            const targetState = stateNameByNonTerminal.get(targetNonTerminal) ?? targetNonTerminal;
-
-            return (
-              <div key={production.id} className="rounded-lg border bg-card p-3">
-                <p className="font-mono text-sm text-foreground">
-                  δ({fromState}, {terminal}) = {targetState} ⇒ {production.left} →{" "}
-                  {formatRule(production.rightTokens)}
+      <Accordion type="single" collapsible defaultValue="transformation" className="rounded-xl border bg-background/50 px-4">
+        <AccordionItem value="transformation">
+          <AccordionTrigger className="text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:no-underline">
+            Ver pasos de transformacion
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-4 pb-1">
+              <div className="rounded-xl border bg-background/50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  1. Estados a simbolos
                 </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {epsilonProductions.length > 0 && (
-        <div className="rounded-xl border bg-background/50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            3. Estados de aceptacion
-          </p>
-          <div className="mt-3 space-y-2">
-            {epsilonProductions.map((production) => {
-              const stateName = stateNameByNonTerminal.get(production.left) ?? production.left;
-
-              return (
-                <div key={production.id} className="rounded-lg border bg-card p-3">
-                  <p className="font-mono text-sm text-foreground">
-                    {stateName} es final ⇒ {production.left} → {EPSILON_DISPLAY}
-                  </p>
+                <div className="mt-3 grid gap-2">
+                  {stateMapping.map((item) => (
+                    <p key={item.stateId} className="rounded-lg border bg-card p-3 font-mono text-sm text-foreground">
+                      {item.stateName} {"->"} {item.nonTerminal}
+                    </p>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              </div>
 
-      <div className="rounded-xl border bg-background/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          4. Gramatica resultante
-        </p>
-        <p className="mt-3 font-mono text-sm text-foreground">
-          G = ({`{${grammar.nonTerminals.join(", ")}}`}, {`{${grammar.terminals.join(", ")}}`}, P,{" "}
-          {grammar.startSymbol})
-        </p>
-      </div>
+              <div className="rounded-xl border bg-background/50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  2. Funciones a reglas
+                </p>
+                <div className="mt-3 space-y-2">
+                  {transitionProductions.map((production) => {
+                    const terminal = production.rightTokens[0] ?? "";
+                    const targetNonTerminal = production.rightTokens[1] ?? "";
+                    const fromState = stateNameByNonTerminal.get(production.left) ?? production.left;
+                    const targetState = stateNameByNonTerminal.get(targetNonTerminal) ?? targetNonTerminal;
+
+                    return (
+                      <div
+                        key={production.id}
+                        className="rounded-lg border bg-card p-3"
+                      >
+                        <p className="font-mono text-sm text-foreground">
+                          d({fromState}, {terminal}) = {targetState} {"⇒"}{" "}
+                          {production.left} {"->"}{" "}
+                          {formatRule(production.rightTokens)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {epsilonProductions.length > 0 && (
+                <div className="rounded-xl border bg-background/50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    3. Estados de aceptacion
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {epsilonProductions.map((production) => {
+                      const stateName = stateNameByNonTerminal.get(production.left) ?? production.left;
+
+                      return (
+                        <div key={production.id} className="rounded-lg border bg-card p-3">
+                          <p className="font-mono text-sm text-foreground">
+                            {stateName} es final ⇒ {production.left} → {EPSILON_DISPLAY}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </section>
   );
 }
 
-function TreeNodeCard({ node }: { node: GeneralTreeNode; depth?: number }) {
-  const cardClass =
-    node.type === "nonTerminal"
-      ? "border-primary/30 bg-primary/5 text-primary"
-      : "border-border bg-card text-foreground";
-
-  return (
-    <div className="space-y-3">
-      <div
-        className={`inline-flex min-w-28 items-center justify-center rounded-2xl border px-4 py-3 font-mono text-sm font-semibold shadow-sm ${cardClass}`}
-      >
-        {node.label}
-      </div>
-
-      {node.children.length > 0 && (
-        <div className="ml-6 space-y-4 border-l border-dashed border-border/80 pl-6">
-          {node.children.map((child) => (
-            <div key={child.id} className="relative">
-              <span className="absolute -left-6 top-5 h-px w-6 bg-border/80" />
-              <TreeNodeCard node={child} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function GeneralTreeSection({ grammar }: { grammar: GrammarDefinition }) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [viewportSize, setViewportSize] = useState({ width: 960, height: 384 });
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 24, y: 24 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0, offsetX: 24, offsetY: 24 });
   const tree = useMemo(() => buildGeneralTree(grammar), [grammar]);
+  const layout = useMemo(() => buildTreeLayout(tree.root), [tree]);
+  const maxZoom = useMemo(() => {
+    const sizeFactor = Math.max(layout.width / 1200, layout.height / 700);
+    return Math.min(24, Math.max(4, Math.ceil(sizeFactor * 4)));
+  }, [layout.height, layout.width]);
+  const panSpeedFactor = useMemo(() => {
+    const normalizedWidth = layout.width / 1400;
+    const normalizedHeight = layout.height / 820;
+    const sizeFactor = Math.max(normalizedWidth, normalizedHeight, 1);
+    const aggressiveSizeBoost = sizeFactor <= 1.25 ? 1 : Math.pow(sizeFactor, 1.35);
+    const zoomFactor = Math.max(0.5, 1.55 / Math.max(scale, 0.3));
+    return Math.min(12, Math.max(1.15, aggressiveSizeBoost * zoomFactor));
+  }, [layout.height, layout.width, scale]);
+  const initialViewport = useMemo(() => {
+    const isVeryLargeDiagram =
+      layout.width > viewportSize.width * 1.5 || layout.height > viewportSize.height * 1.8;
+
+    if (!isVeryLargeDiagram || maxZoom <= 5) {
+      return {
+        scale: 1,
+        offset: { x: 24, y: 24 },
+      };
+    }
+
+    const halfMaxZoom = Math.max(0.22, maxZoom / 2);
+
+    return {
+      scale: halfMaxZoom,
+      offset: {
+        x: viewportSize.width / (2 * halfMaxZoom) - layout.width / 2,
+        y: viewportSize.height / (2 * halfMaxZoom) - layout.height / 2,
+      },
+    };
+  }, [layout.height, layout.width, maxZoom, viewportSize.height, viewportSize.width]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const updateViewportSize = () => {
+      setViewportSize({
+        width: viewport.clientWidth || 960,
+        height: viewport.clientHeight || 384,
+      });
+    };
+
+    updateViewportSize();
+
+    const observer = new ResizeObserver(updateViewportSize);
+    observer.observe(viewport);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setScale(initialViewport.scale);
+    setOffset(initialViewport.offset);
+  }, [grammar, initialViewport]);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+
+      const direction = event.deltaY > 0 ? -1 : 1;
+      setScale((current) => {
+        const next = current + direction * 0.12;
+        return Math.min(Math.max(next, 0.2), maxZoom);
+      });
+    };
+
+    svg.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      svg.removeEventListener("wheel", handleWheel);
+    };
+  }, [maxZoom]);
+
+  const handleExport = () => {
+    if (!svgRef.current) return;
+    exportSvgElementAsSvg(svgRef.current, "arbol-general-gramatica");
+    toast({
+      title: "Arbol exportado",
+      description: "El arbol general se descargo como SVG.",
+    });
+  };
+
+  const handleCopy = async () => {
+    if (!svgRef.current) return;
+
+    try {
+      await copySvgElementAsPngToClipboard(svgRef.current);
+      toast({
+        title: "Arbol copiado",
+        description: "El arbol general se copio al portapapeles como PNG.",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo copiar",
+        description: error instanceof Error ? error.message : "No fue posible copiar el arbol.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
+    if (event.button !== 0) return;
+    setIsPanning(true);
+    panStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: offset.x,
+      offsetY: offset.y,
+    };
+  };
+
+  const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
+    if (!isPanning) return;
+    setOffset({
+      x: panStart.current.offsetX + (event.clientX - panStart.current.x) * panSpeedFactor,
+      y: panStart.current.offsetY + (event.clientY - panStart.current.y) * panSpeedFactor,
+    });
+  };
+
+  const stopPanning = () => {
+    setIsPanning(false);
+  };
+
+  const zoomPercentage = Math.round(scale * 100);
 
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
       <div className="space-y-1">
         <p className="text-sm font-semibold text-foreground">Arbol general</p>
         <p className="text-xs text-muted-foreground">
-          Muestra la estructura abstracta de derivacion desde el simbolo inicial.
+          Expande todas las producciones posibles desde S, arrastrando el prefijo terminal antes del no terminal expandido.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {tree.isInfinite
+            ? `Se detecto recursion alcanzable; el arbol se limita a n = ${tree.maxDepth}. Las hojas pendientes se marcan con borde discontinuo.`
+            : "No se detecto recursion alcanzable desde el simbolo inicial, asi que el arbol se construye completo."}
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border bg-gradient-to-b from-background to-background/70 p-5">
-        <TreeNodeCard node={tree} />
+      <div className="flex flex-col gap-3 rounded-xl border bg-background/50 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            onClick={() => setScale((current) => Math.max(current - 0.1, 0.2))}
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+          <div className="w-14 text-center font-mono text-xs text-muted-foreground">{zoomPercentage}%</div>
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            onClick={() => setScale((current) => Math.min(current + 0.1, maxZoom))}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={() => {
+              setScale(initialViewport.scale);
+              setOffset(initialViewport.offset);
+            }}
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" className="gap-2" onClick={handleCopy}>
+            <Clipboard className="h-4 w-4" />
+            Copiar
+          </Button>
+          <Button type="button" variant="outline" className="gap-2" onClick={handleExport}>
+            <Download className="h-4 w-4" />
+            Exportar SVG
+          </Button>
+        </div>
+      </div>
+
+      <div ref={containerRef} className="min-w-0 rounded-xl border bg-gradient-to-b from-background to-background/70 p-5">
+        <div ref={viewportRef} className="h-[24rem] w-full overflow-hidden rounded-lg border bg-background/60">
+          <svg
+            ref={svgRef}
+            className={`h-full w-full ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+            viewBox={`0 0 ${Math.max(layout.width, 1200)} ${Math.max(layout.height, 900)}`}
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ userSelect: "none" }}
+            onDragStart={(event) => event.preventDefault()}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={stopPanning}
+            onMouseLeave={stopPanning}
+          >
+            <g transform={`translate(${offset.x}, ${offset.y}) scale(${scale})`} pointerEvents="none">
+              {layout.edges.map((edge, index) => (
+                <line
+                  key={`edge-${index}`}
+                  x1={edge.fromX}
+                  y1={edge.fromY}
+                  x2={edge.toX}
+                  y2={edge.toY}
+                  stroke="currentColor"
+                  strokeOpacity="0.28"
+                  strokeWidth={1.5}
+                />
+              ))}
+
+              {layout.nodes.map((node) => (
+                <g key={node.id}>
+                  <rect
+                    x={node.x}
+                    y={node.y}
+                    width={node.width}
+                    height={node.height}
+                    rx={16}
+                    fill={
+                      node.isPendingLeaf
+                        ? "rgba(245, 158, 11, 0.15)"
+                        : node.isTerminalLeaf
+                          ? "rgba(16, 185, 129, 0.12)"
+                          : "rgba(59, 130, 246, 0.08)"
+                    }
+                    stroke={
+                      node.isPendingLeaf
+                        ? "rgba(245, 158, 11, 0.65)"
+                        : node.isTerminalLeaf
+                          ? "rgba(16, 185, 129, 0.65)"
+                          : "rgba(59, 130, 246, 0.35)"
+                    }
+                    strokeDasharray={node.isPendingLeaf ? "6 4" : undefined}
+                  />
+                  <text
+                    x={node.x + node.width / 2}
+                    y={node.y + node.height / 2}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontFamily="monospace"
+                    fontSize={13}
+                    fill="currentColor"
+                  >
+                    {node.label}
+                  </text>
+                </g>
+              ))}
+            </g>
+          </svg>
+        </div>
       </div>
     </section>
   );
 }
 
-function DerivationTreeSection({ analysis }: { analysis: GrammarWordAnalysis }) {
+function DerivationTreeSection({
+  analysis,
+  wordInput,
+}: {
+  analysis: GrammarWordAnalysis;
+  wordInput: string;
+}) {
   const visibleSteps = analysis.particularDerivation.slice(1);
+  const trimmedWord = wordInput.trim() || EPSILON_DISPLAY;
 
   return (
     <section className="space-y-4 rounded-xl border bg-card p-4">
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">Arbol particular</p>
-        <p className="text-xs text-muted-foreground">
-          Se construye con la cadena validada cuando existe una derivacion aceptante.
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">Arbol particular</p>
+          <p className="text-sm text-muted-foreground">{analysis.reason}</p>
+        </div>
+        <div
+          className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+            analysis.accepted
+              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "bg-destructive/10 text-destructive"
+          }`}
+        >
+          {analysis.accepted ? `${trimmedWord} in L(G)` : `${trimmedWord} not in L(G)`}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl border bg-gradient-to-b from-background to-background/70 p-5">
@@ -372,36 +802,6 @@ function DerivationSequenceSection({ steps }: { steps: GrammarDerivationStep[] }
             ✓
           </span>
         )}
-      </div>
-    </section>
-  );
-}
-
-function ConclusionSection({
-  analysis,
-  wordInput,
-}: {
-  analysis: GrammarWordAnalysis;
-  wordInput: string;
-}) {
-  const trimmedWord = wordInput.trim() || EPSILON_DISPLAY;
-
-  return (
-    <section className="rounded-xl border bg-card p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Conclusion</p>
-          <p className="text-sm text-muted-foreground">{analysis.reason}</p>
-        </div>
-        <div
-          className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-            analysis.accepted
-              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : "bg-destructive/10 text-destructive"
-          }`}
-        >
-          {analysis.accepted ? `${trimmedWord} ∈ L(G)` : `${trimmedWord} ∉ L(G)`}
-        </div>
       </div>
     </section>
   );
@@ -486,11 +886,18 @@ function ValidationWorkspace({
   );
 }
 
-function ManualGrammarWorkspace() {
-  const [terminalsInput, setTerminalsInput] = useState("");
-  const [nonTerminalsInput, setNonTerminalsInput] = useState("");
-  const [productions, setProductions] = useState<ProductionDraft[]>([createProductionDraft()]);
-
+function ManualGrammarWorkspace({
+  strictGrammarRules,
+  draft,
+  onDraftChange,
+  onReset,
+}: {
+  strictGrammarRules: boolean;
+  draft: ManualGrammarDraftState;
+  onDraftChange: (next: ManualGrammarDraftState) => void;
+  onReset: () => void;
+}) {
+  const { terminalsInput, nonTerminalsInput, productions } = draft;
   const startSymbol = getStartSymbol(nonTerminalsInput);
   const normalizedProductions = useMemo<GrammarProductionInput[]>(
     () => productions.map(({ left, rule }) => ({ left, rule })),
@@ -498,7 +905,7 @@ function ManualGrammarWorkspace() {
   );
 
   const previewQuery = useQuery<GrammarManualAnalysisResult>({
-    queryKey: ["manual-grammar-preview", terminalsInput, nonTerminalsInput, normalizedProductions],
+    queryKey: ["manual-grammar-preview", terminalsInput, nonTerminalsInput, normalizedProductions, strictGrammarRules],
     queryFn: () =>
       analyzeManualGrammarRequest({
         terminals: parseSymbolList(terminalsInput),
@@ -506,6 +913,7 @@ function ManualGrammarWorkspace() {
         startSymbol,
         productions: normalizedProductions,
         word: "",
+        strictRules: strictGrammarRules,
       }),
     refetchOnWindowFocus: false,
   });
@@ -518,12 +926,13 @@ function ManualGrammarWorkspace() {
         startSymbol,
         productions: normalizedProductions,
         word,
+        strictRules: strictGrammarRules,
       }),
   });
 
   useEffect(() => {
     validateMutation.reset();
-  }, [terminalsInput, nonTerminalsInput, normalizedProductions, startSymbol]);
+  }, [terminalsInput, nonTerminalsInput, normalizedProductions, startSymbol, strictGrammarRules]);
 
   const validation = previewQuery.data?.validation;
   const grammar = validation?.grammar;
@@ -533,6 +942,17 @@ function ManualGrammarWorkspace() {
   return (
     <div className="space-y-4">
       <section className="space-y-4 rounded-xl border bg-card p-4">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onReset}
+          >
+            Reset
+          </Button>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -540,7 +960,7 @@ function ManualGrammarWorkspace() {
             </label>
             <Input
               value={nonTerminalsInput}
-              onChange={(event) => setNonTerminalsInput(event.target.value)}
+              onChange={(event) => onDraftChange({ ...draft, nonTerminalsInput: event.target.value })}
               placeholder="S, A, B"
             />
           </div>
@@ -551,7 +971,7 @@ function ManualGrammarWorkspace() {
             </label>
             <Input
               value={terminalsInput}
-              onChange={(event) => setTerminalsInput(event.target.value)}
+              onChange={(event) => onDraftChange({ ...draft, terminalsInput: event.target.value })}
               placeholder="0, 1"
             />
           </div>
@@ -574,7 +994,12 @@ function ManualGrammarWorkspace() {
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => setProductions((current) => [...current, createProductionDraft()])}
+              onClick={() =>
+                onDraftChange({
+                  ...draft,
+                  productions: [...productions, createProductionDraft()],
+                })
+              }
             >
               <Plus className="h-4 w-4" />
               Agregar
@@ -587,14 +1012,18 @@ function ManualGrammarWorkspace() {
                 key={production.id}
                 production={production}
                 onChange={(next) =>
-                  setProductions((current) =>
-                    current.map((item, itemIndex) =>
+                  onDraftChange({
+                    ...draft,
+                    productions: productions.map((item, itemIndex) =>
                       itemIndex === index ? { ...item, ...next } : item,
                     ),
-                  )
+                  })
                 }
                 onRemove={() =>
-                  setProductions((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                  onDraftChange({
+                    ...draft,
+                    productions: productions.filter((_, itemIndex) => itemIndex !== index),
+                  })
                 }
                 disableRemove={productions.length === 1}
               />
@@ -631,30 +1060,35 @@ function ManualGrammarWorkspace() {
 
       {analysis && (
         <>
-          <DerivationTreeSection analysis={analysis} />
+          <DerivationTreeSection analysis={analysis} wordInput={validatedWord} />
           <DerivationSequenceSection steps={analysis.particularDerivation} />
-          <ConclusionSection analysis={analysis} wordInput={validatedWord} />
         </>
       )}
     </div>
   );
 }
 
-function AutomatonGrammarWorkspace({ data }: { data: AutomataData }) {
+function AutomatonGrammarWorkspace({
+  data,
+  strictGrammarRules,
+}: {
+  data: AutomataData;
+  strictGrammarRules: boolean;
+}) {
   const previewQuery = useQuery<GrammarAutomatonAnalysisResult>({
-    queryKey: ["equivalent-grammar-preview", getTheorySnapshot(data)],
-    queryFn: () => analyzeEquivalentGrammarRequest(data, ""),
+    queryKey: ["equivalent-grammar-preview", getTheorySnapshot(data), strictGrammarRules],
+    queryFn: () => analyzeEquivalentGrammarRequest(data, "", strictGrammarRules),
     enabled: data.states.length > 0,
     refetchOnWindowFocus: false,
   });
 
   const validateMutation = useMutation({
-    mutationFn: (word: string) => analyzeEquivalentGrammarRequest(data, word),
+    mutationFn: (word: string) => analyzeEquivalentGrammarRequest(data, word, strictGrammarRules),
   });
 
   useEffect(() => {
     validateMutation.reset();
-  }, [data]);
+  }, [data, strictGrammarRules]);
 
   if (data.states.length === 0) {
     return (
@@ -690,16 +1124,17 @@ function AutomatonGrammarWorkspace({ data }: { data: AutomataData }) {
 
       {analysis && (
         <>
-          <DerivationTreeSection analysis={analysis} />
+          <DerivationTreeSection analysis={analysis} wordInput={validatedWord} />
           <DerivationSequenceSection steps={analysis.particularDerivation} />
-          <ConclusionSection analysis={analysis} wordInput={validatedWord} />
         </>
       )}
     </div>
   );
 }
 
-export function GrammarPanel({ data }: GrammarPanelProps) {
+export function GrammarPanel({ data, strictGrammarRules }: GrammarPanelProps) {
+  const [manualDraft, setManualDraft] = useState<ManualGrammarDraftState>(() => createManualGrammarDraftState());
+
   return (
     <div className="border-t p-2">
       <Sheet>
@@ -730,11 +1165,16 @@ export function GrammarPanel({ data }: GrammarPanelProps) {
                 </TabsList>
 
                 <TabsContent value="manual" className="space-y-4">
-                  <ManualGrammarWorkspace />
+                  <ManualGrammarWorkspace
+                    strictGrammarRules={strictGrammarRules}
+                    draft={manualDraft}
+                    onDraftChange={setManualDraft}
+                    onReset={() => setManualDraft(createManualGrammarDraftState())}
+                  />
                 </TabsContent>
 
                 <TabsContent value="automaton" className="space-y-4">
-                  <AutomatonGrammarWorkspace data={data} />
+                  <AutomatonGrammarWorkspace data={data} strictGrammarRules={strictGrammarRules} />
                 </TabsContent>
               </Tabs>
             </div>
