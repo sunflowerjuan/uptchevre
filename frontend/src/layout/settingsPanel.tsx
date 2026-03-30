@@ -10,20 +10,25 @@ import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { AUTOMATA_EXAMPLES } from "@/constants/automataExamples";
 import { CREATORS } from "@/constants/creators";
 import { displayWord } from "@/lib/automata";
+import type { GrammarValidationSettings } from "@/lib/automata-api";
 
 interface SettingsPanelProps {
   showFormalism: boolean;
   showSimulator: boolean;
+  grammarValidationSettings: GrammarValidationSettings;
   onShowFormalismChange: (checked: boolean) => void;
   onShowSimulatorChange: (checked: boolean) => void;
+  onGrammarValidationSettingsChange: (next: GrammarValidationSettings) => void;
   onLoadExample: (data: AutomataData, title: string) => void;
 }
 
 export function SettingsPanel({
   showFormalism,
   showSimulator,
+  grammarValidationSettings,
   onShowFormalismChange,
   onShowSimulatorChange,
+  onGrammarValidationSettingsChange,
   onLoadExample,
 }: SettingsPanelProps) {
   const { theme = "system", setTheme } = useTheme();
@@ -123,6 +128,177 @@ export function SettingsPanel({
                   </p>
                 </div>
                 <Switch checked={showFormalism} onCheckedChange={onShowFormalismChange} />
+              </div>
+            </section>
+
+            <section className="space-y-3 rounded-xl border bg-card p-4 text-xs">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Reglas de gramaticas</p>
+                <p className="text-xs text-muted-foreground">
+                  Activa o desactiva las validaciones usadas al construir gramaticas.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Minimo de terminales</p>
+                  <p className="text-xs text-muted-foreground">
+                    Exige al menos {grammarValidationSettings.minTerminals} simbolos terminales.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireMinTerminals}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireMinTerminals: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Minimo de no terminales</p>
+                  <p className="text-xs text-muted-foreground">
+                    Exige al menos {grammarValidationSettings.minNonTerminals} no terminal.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireMinNonTerminals}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireMinNonTerminals: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Simbolo inicial valido</p>
+                  <p className="text-xs text-muted-foreground">
+                    Obliga a que S pertenezca a los no terminales definidos.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireStartSymbolInNonTerminals}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireStartSymbolInNonTerminals: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Lado izquierdo no terminal</p>
+                  <p className="text-xs text-muted-foreground">
+                    Valida que cada produccion empiece con un no terminal definido.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireLeftSideNonTerminal}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireLeftSideNonTerminal: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Minimo de producciones</p>
+                  <p className="text-xs text-muted-foreground">
+                    Exige al menos {grammarValidationSettings.minProductions} producciones.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireMinProductions}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireMinProductions: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Simbolos definidos</p>
+                  <p className="text-xs text-muted-foreground">
+                    Rechaza producciones con simbolos fuera de los conjuntos declarados.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireKnownSymbols}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireKnownSymbols: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Linealidad</p>
+                  <p className="text-xs text-muted-foreground">
+                    Verifica que cada produccion siga el formato de una gramatica regular.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireLinearity}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireLinearity: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Una sola direccion</p>
+                  <p className="text-xs text-muted-foreground">
+                    Evita mezclar lineal derecha con lineal izquierda.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireSingleLinearityDirection}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireSingleLinearityDirection: checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Posicion del no terminal</p>
+                  <p className="text-xs text-muted-foreground">
+                    Valida que el no terminal quede al inicio o al final segun corresponda.
+                  </p>
+                </div>
+                <Switch
+                  checked={grammarValidationSettings.requireNonTerminalPosition}
+                  onCheckedChange={(checked) =>
+                    onGrammarValidationSettingsChange({
+                      ...grammarValidationSettings,
+                      requireNonTerminalPosition: checked,
+                    })
+                  }
+                />
               </div>
             </section>
 
