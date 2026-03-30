@@ -27,10 +27,12 @@ import {
 import { EPSILON_DISPLAY, getTheorySnapshot } from "@/lib/automata";
 import { copySvgElementAsPngToClipboard, exportSvgElementAsSvg } from "@/lib/automata-export";
 import { toast } from "@/hooks/use-toast";
+import type { ReactNode } from "react";
 
 interface GrammarPanelProps {
   data: AutomataData;
   strictGrammarRules: boolean;
+  trigger?: ReactNode;
 }
 
 interface GeneralTreeNode {
@@ -1132,17 +1134,19 @@ function AutomatonGrammarWorkspace({
   );
 }
 
-export function GrammarPanel({ data, strictGrammarRules }: GrammarPanelProps) {
+export function GrammarPanel({ data, strictGrammarRules, trigger }: GrammarPanelProps) {
   const [manualDraft, setManualDraft] = useState<ManualGrammarDraftState>(() => createManualGrammarDraftState());
 
   return (
-    <div className="border-t p-2">
+    <div className={trigger ? undefined : "border-t p-2"}>
       <Sheet>
         <SheetTrigger asChild>
-          <Button type="button" variant="secondary" className="w-full justify-center gap-2">
-            <PanelRightOpen className="h-4 w-4" />
-            GRAMATICAS
-          </Button>
+          {trigger ?? (
+            <Button type="button" variant="secondary" className="w-full justify-center gap-2">
+              <PanelRightOpen className="h-4 w-4" />
+              GRAMATICAS
+            </Button>
+          )}
         </SheetTrigger>
 
         <SheetContent side="right" className="w-full p-0 sm:max-w-5xl">

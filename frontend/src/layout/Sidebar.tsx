@@ -9,6 +9,7 @@ interface SidebarProps {
   activeModule: SidebarModule;
   onToggle: () => void;
   onSelectModule: (module: SidebarModule) => void;
+  secondaryTools?: ReactNode;
   footer?: ReactNode;
 }
 
@@ -24,6 +25,7 @@ export function Sidebar({
   activeModule,
   onToggle,
   onSelectModule,
+  secondaryTools,
   footer,
 }: SidebarProps) {
   return (
@@ -66,6 +68,17 @@ export function Sidebar({
             );
           })}
         </nav>
+
+        {secondaryTools && (
+          <div className="border-t p-2">
+            {!collapsed && (
+              <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Herramientas extra
+              </p>
+            )}
+            {secondaryTools}
+          </div>
+        )}
 
         {!collapsed && footer}
       </div>

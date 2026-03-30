@@ -16,6 +16,8 @@ import { EditorToolbar } from "@/components/EditorToolbar";
 import { Header } from "@/layout/header";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
 import { SettingsPanel } from "@/layout/settingsPanel";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
 import { analyzeAutomatonRequest } from "@/lib/automata-api";
 import type { AutomataSimulationResult } from "@/lib/automata-api";
@@ -31,6 +33,7 @@ import {
 } from "@/lib/automata-export";
 import { getTheorySnapshot } from "@/lib/automata";
 import { parseJkautFile, type AutomataWorkspaceDocument } from "@/lib/automata-workspace";
+import { Download, Sigma } from "lucide-react";
 
 const Index = () => {
   const editor = useAutomataEditor();
@@ -316,6 +319,46 @@ const Index = () => {
         onUndo={editor.undo}
         onRedo={editor.redo}
         data={editor.data}
+        exportPanel={
+          <ImportExportPanel
+            trigger={
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Importar/Exportar</TooltipContent>
+              </Tooltip>
+            }
+            documentName={editor.documentName}
+            onImportFile={(file) => void handleImportFile(file)}
+            onExportJkaut={handleExportJkaut}
+            onExportDiagramSvg={handleExportDiagramSvg}
+            onExportDiagramPng={(fileName) => void handleExportDiagramPng(fileName)}
+            onCopyDiagram={() => void handleCopyDiagram()}
+            onExportFormalismMarkdown={handleExportFormalismMarkdown}
+            onExportFormalismImage={(fileName, section) => void handleExportFormalismImage(fileName, section)}
+            onCopyFormalism={(section) => void handleCopyFormalism(section)}
+            onExportSimulationMarkdown={handleExportSimulationMarkdown}
+            onExportSimulationPdf={(fileName) => void handleExportSimulationPdf(fileName)}
+            recentDocuments={editor.recentDocuments}
+            onOpenRecent={handleOpenRecent}
+            canExportDiagram={editor.data.states.length > 0}
+            canExportFormalism={Boolean(
+              analysisQuery.data &&
+                showFormalism &&
+                (activeModule === "both" || activeModule === "formalism"),
+            )}
+            canExportSimulation={Boolean(
+              analysisQuery.data &&
+                lastSimulation &&
+                showSimulator &&
+                (activeModule === "both" || activeModule === "simulator"),
+            )}
+            supportsEpsilon={Boolean(analysisQuery.data?.supportsEpsilon)}
+          />
+        }
         settingsPanel={
           <SettingsPanel
             showSimulator={showSimulator}
@@ -335,38 +378,21 @@ const Index = () => {
           activeModule={activeModule}
           onToggle={() => setSidebarCollapsed((prev) => !prev)}
           onSelectModule={setActiveModule}
-          footer={
-            <>
-              <GrammarPanel data={editor.data} strictGrammarRules={strictGrammarRules} />
-              <ImportExportPanel
-                documentName={editor.documentName}
-                onImportFile={(file) => void handleImportFile(file)}
-                onExportJkaut={handleExportJkaut}
-                onExportDiagramSvg={handleExportDiagramSvg}
-                onExportDiagramPng={(fileName) => void handleExportDiagramPng(fileName)}
-                onCopyDiagram={() => void handleCopyDiagram()}
-                onExportFormalismMarkdown={handleExportFormalismMarkdown}
-                onExportFormalismImage={(fileName, section) => void handleExportFormalismImage(fileName, section)}
-                onCopyFormalism={(section) => void handleCopyFormalism(section)}
-                onExportSimulationMarkdown={handleExportSimulationMarkdown}
-                onExportSimulationPdf={(fileName) => void handleExportSimulationPdf(fileName)}
-                recentDocuments={editor.recentDocuments}
-                onOpenRecent={handleOpenRecent}
-                canExportDiagram={editor.data.states.length > 0}
-                canExportFormalism={Boolean(
-                  analysisQuery.data &&
-                    showFormalism &&
-                    (activeModule === "both" || activeModule === "formalism"),
-                )}
-                canExportSimulation={Boolean(
-                  analysisQuery.data &&
-                    lastSimulation &&
-                    showSimulator &&
-                    (activeModule === "both" || activeModule === "simulator"),
-                )}
-                supportsEpsilon={Boolean(analysisQuery.data?.supportsEpsilon)}
-              />
-            </>
+          secondaryTools={
+            <GrammarPanel
+              data={editor.data}
+              strictGrammarRules={strictGrammarRules}
+              trigger={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`w-full ${sidebarCollapsed ? "justify-center px-2" : "justify-start gap-2"}`}
+                >
+                  <Sigma className="h-4 w-4" />
+                  {!sidebarCollapsed && <span className="text-xs">Gramaticas</span>}
+                </Button>
+              }
+            />
           }
         />
 
