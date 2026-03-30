@@ -6,29 +6,7 @@ import {
   getStateNameMap,
   detectAutomatonType,
 } from "./automata-analysis.js";
-
-function detectNamingStyle(nameMap: Map<string, string>): { prefix: string; subscript: boolean } {
-  const names = Array.from(nameMap.values());
-  for (const name of names) {
-    const subscriptMatch = name.match(/^([a-zA-Z]+)[₀₁₂₃₄₅₆₇₈₉]+$/);
-    if (subscriptMatch) return { prefix: subscriptMatch[1], subscript: true };
-    const regularMatch = name.match(/^([a-zA-Z]+)\d+$/);
-    if (regularMatch) return { prefix: regularMatch[1], subscript: false };
-  }
-  return { prefix: "q", subscript: false };
-}
-
-const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
-function toSubscript(n: number): string {
-  return String(n)
-    .split("")
-    .map((d) => SUBSCRIPT_DIGITS[parseInt(d, 10)])
-    .join("");
-}
-
-function makeLabel(prefix: string, subscript: boolean, index: number): string {
-  return `${prefix}${subscript ? toSubscript(index) : index}`;
-}
+import { detectNamingStyle, makeLabel } from "./state-label-naming.js";
 
 export function transformNfaToDfa(nfa: AutomataData): NfaToDfaTransformationResult {
   const originalType = detectAutomatonType(nfa);
@@ -102,7 +80,7 @@ export function transformNfaToDfa(nfa: AutomataData): NfaToDfaTransformationResu
 
   orderedKeys.forEach((key, i) => {
     keyToId.set(key, `dfa_s${i}`);
-    keyToLabel.set(key, makeLabel(namingStyle.prefix, namingStyle.subscript, i));
+    keyToLabel.set(key, makeLabel(namingStyle, i));
   });
 
   const nfaAcceptIds = new Set(nfa.states.filter((s) => s.isAccept).map((s) => s.id));

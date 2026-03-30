@@ -8,7 +8,18 @@ import { transformNfaToDfaRequest } from "@/lib/automata-api";
 import { TransformationStepsSheet } from "@/components/TransformationStepsSheet";
 import { getTheorySnapshot } from "@/lib/automata";
 
-/** Estado que vive en el padre para no perder la conversión al cambiar de módulo en la barra lateral. */
+function structuralKey(d: AutomataData): string {
+  const states = d.states
+    .map((s) => `${s.id}:${s.isInitial ? 1 : 0}:${s.isAccept ? 1 : 0}`)
+    .sort()
+    .join("|");
+  const transitions = d.transitions
+    .map((t) => `${t.from}:${t.symbol}:${t.to}`)
+    .sort()
+    .join("|");
+  return `${states}||${transitions}`;
+}
+
 export type PersistedNfaToDfaState = {
   savedResult: NfaToDfaTransformationResult;
   savedNfaAnalysis: AutomataAnalysisResult;
@@ -341,10 +352,9 @@ export function TransformationPanel({
     refetchOnWindowFocus: false,
   });
 
-  // Persistir en el padre cuando termina la transformación (solo AFN en el editor).
   useEffect(() => {
     if (!transformationQuery.data || !analysis || analysis.automatonType === "DFA") return;
-    const nextKey = JSON.stringify(getTheorySnapshot(data));
+    const nextKey = structuralKey(data);
     const next: PersistedNfaToDfaState = {
       savedResult: transformationQuery.data,
       savedNfaAnalysis: analysis,
@@ -372,23 +382,41 @@ export function TransformationPanel({
     setView,
   ]);
 
-  // Borrar conversión guardada si el autómata del editor deja de coincidir (AFN editado u otro documento).
   useEffect(() => {
     if (!persistedNfaToDfa?.savedNfaKey || !persistedNfaToDfa.savedResult) return;
-    const currentKey = JSON.stringify(getTheorySnapshot(data));
-    const dfaKey = JSON.stringify(getTheorySnapshot(persistedNfaToDfa.savedResult.dfa));
+    const currentKey = structuralKey(data);
+    const dfaKey = structuralKey(persistedNfaToDfa.savedResult.dfa);
     if (currentKey !== persistedNfaToDfa.savedNfaKey && currentKey !== dfaKey) {
       onPersistedNfaToDfaChange(null);
       setView("nfa");
     }
   }, [data, persistedNfaToDfa, onPersistedNfaToDfaChange, setView]);
 
-  const savedNfaAnalysis = persistedNfaToDfa?.savedNfaAnalysis ?? null;
+  // Sincronizar savedNfaAnalysis y savedNfaData cuando el usuario renombra estados en el NFA
+  // (la estructura no cambia, solo los labels — structuralKey sigue igual).
+  useEffect(() => {
+    if (!persistedNfaToDfa || !analysis || analysis.automatonType === "DFA") return;
+    const currentKey = structuralKey(data);
+    if (
+      currentKey === persistedNfaToDfa.savedNfaKey &&
+      analysis !== persistedNfaToDfa.savedNfaAnalysis
+    ) {
+      onPersistedNfaToDfaChange({
+        ...persistedNfaToDfa,
+        savedNfaAnalysis: analysis,
+        savedNfaData: data,
+      });
+    }
+  }, [analysis, data, persistedNfaToDfa, onPersistedNfaToDfaChange]);
+
   const savedNfaData = persistedNfaToDfa?.savedNfaData ?? null;
   const savedNfaKey = persistedNfaToDfa?.savedNfaKey ?? null;
   const savedResult = persistedNfaToDfa?.savedResult ?? null;
 
-  const effectiveNfaAnalysis = savedNfaAnalysis ?? analysis;
+  const editorHasDfa = analysis?.automatonType === "DFA" && savedResult !== null;
+  const effectiveNfaAnalysis = editorHasDfa
+    ? (persistedNfaToDfa?.savedNfaAnalysis ?? analysis)
+    : analysis;
   const effectiveResult = savedResult ?? transformationQuery.data ?? null;
   const isEditorDfaWithoutConversion =
     analysis?.automatonType === "DFA" && !effectiveResult;
@@ -445,7 +473,7 @@ export function TransformationPanel({
         {view === "nfa" && effectiveNfaAnalysis && (
           <>
             <NfaFormalism analysis={effectiveNfaAnalysis} />
-            {savedNfaData && JSON.stringify(getTheorySnapshot(data)) !== savedNfaKey && (
+            {savedNfaData && structuralKey(data) !== savedNfaKey && (
               <div className="px-0 pb-2">
                 <Button
                   size="sm"
