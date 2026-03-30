@@ -241,10 +241,19 @@ export async function analyzeManualGrammarRequest(payload: {
   startSymbol: string;
   productions: GrammarProductionInput[];
   word: string;
+  strictRules?: boolean;
 }) {
   return postJson<GrammarManualAnalysisResult>("/api/grammar/manual", payload);
 }
 
-export async function analyzeEquivalentGrammarRequest(automaton: AutomataData, word: string) {
-  return postJson<GrammarAutomatonAnalysisResult>("/api/grammar/equivalent", { automaton, word });
+export async function analyzeEquivalentGrammarRequest(
+  automaton: AutomataData,
+  word: string,
+  strictRules?: boolean,
+) {
+  return postJson<GrammarAutomatonAnalysisResult>("/api/grammar/equivalent", {
+    automaton,
+    word,
+    strictRules,
+  });
 }

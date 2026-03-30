@@ -89,6 +89,7 @@ app.post("/api/grammar/manual", (req, res) => {
     startSymbol?: string;
     productions?: GrammarProductionInput[];
     word?: string;
+    strictRules?: boolean;
   };
 
   if (
@@ -111,13 +112,14 @@ app.post("/api/grammar/manual", (req, res) => {
     startSymbol: body.startSymbol,
     productions: body.productions,
     word: body.word,
+    strictRules: body.strictRules,
   });
 
   res.json({ ok: true, result });
 });
 
 app.post("/api/grammar/equivalent", (req, res) => {
-  const body = req.body as { automaton?: AutomataData; word?: string };
+  const body = req.body as { automaton?: AutomataData; word?: string; strictRules?: boolean };
 
   if (!body?.automaton || typeof body.word !== "string") {
     res.status(400).json({
@@ -130,6 +132,7 @@ app.post("/api/grammar/equivalent", (req, res) => {
   const result = analyzeAutomatonEquivalentGrammar({
     automaton: body.automaton,
     word: body.word,
+    strictRules: body.strictRules,
   });
 
   res.json({ ok: true, result });

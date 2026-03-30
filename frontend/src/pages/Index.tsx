@@ -36,6 +36,7 @@ const Index = () => {
   const [activeModule, setActiveModule] = useState<SidebarModule>("both");
   const [showSimulator, setShowSimulator] = useState(true);
   const [showFormalism, setShowFormalism] = useState(true);
+  const [strictGrammarRules, setStrictGrammarRules] = useState(true);
   const [lastSimulation, setLastSimulation] = useState<AutomataSimulationResult | null>(null);
   const workAreaContainerId = "uptchevere-workarea";
   const workAreaSvgId = "uptchevere-workarea-svg";
@@ -306,8 +307,10 @@ const Index = () => {
           <SettingsPanel
             showSimulator={showSimulator}
             showFormalism={showFormalism}
+            strictGrammarRules={strictGrammarRules}
             onShowSimulatorChange={setShowSimulator}
             onShowFormalismChange={setShowFormalism}
+            onStrictGrammarRulesChange={setStrictGrammarRules}
             onLoadExample={handleLoadExample}
           />
         }
@@ -321,7 +324,7 @@ const Index = () => {
           onSelectModule={setActiveModule}
           footer={
             <>
-              <GrammarPanel data={editor.data} />
+              <GrammarPanel data={editor.data} strictGrammarRules={strictGrammarRules} />
               <ImportExportPanel
                 documentName={editor.documentName}
                 onImportFile={(file) => void handleImportFile(file)}

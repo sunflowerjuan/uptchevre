@@ -238,6 +238,7 @@ function buildThreadDiagramLines(steps: GrammarDerivationStep[]) {
 
 function validateRegularGrammar(
   definition: Omit<GrammarDefinition, "source" | "linearity"> & { source?: GrammarSource },
+  strictRules = true,
 ): GrammarValidationResult {
   const issues: GrammarValidationIssue[] = [];
   const terminals = Array.from(new Set(definition.terminals.filter(Boolean)));
@@ -245,20 +246,29 @@ function validateRegularGrammar(
   const startSymbol = definition.startSymbol.trim();
   const productions = definition.productions;
 
-  if (terminals.length < 2) {
-    issues.push({ message: "La gramatica debe tener al menos 2 simbolos terminales." });
+  if (strictRules) {
+    if (terminals.length < 2) {
+      issues.push({ message: "La gramatica debe tener al menos 2 simbolos terminales." });
+    }
+
+    if (nonTerminals.length < 3) {
+      issues.push({ message: "La gramatica debe tener al menos 3 simbolos no terminales." });
+    }
+
+    if (!startSymbol || !nonTerminals.includes(startSymbol)) {
+      issues.push({ message: "El simbolo inicial debe pertenecer al conjunto de no terminales." });
+    }
+
+    if (productions.length < 3) {
+      issues.push({ message: "La gramatica debe tener al menos 3 producciones." });
+    }
   }
 
-  if (nonTerminals.length < 1) {
-    issues.push({ message: "La gramatica debe tener al menos 1 simbolo no terminal." });
-  }
-
-  if (!startSymbol || !nonTerminals.includes(startSymbol)) {
-    issues.push({ message: "El simbolo inicial debe pertenecer al conjunto de no terminales." });
-  }
-
-  if (productions.length < 1) {
-    issues.push({ message: "La gramatica debe tener al menos 1 produccion." });
+  const overlappingSymbols = terminals.filter((terminal) => nonTerminals.includes(terminal));
+  if (overlappingSymbols.length > 0) {
+    issues.push({
+      message: `Los conjuntos de terminales y no terminales deben ser diferentes. Simbolos repetidos: ${overlappingSymbols.join(", ")}.`,
+    });
   }
 
   const terminalSet = new Set(terminals);
@@ -266,14 +276,14 @@ function validateRegularGrammar(
   const seenLinearities = new Set<GrammarLinearity>();
 
   for (const production of productions) {
-    if (!nonTerminalSet.has(production.left)) {
+    if (strictRules && !nonTerminalSet.has(production.left)) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} tiene un lado izquierdo invalido.`,
       });
       continue;
     }
 
-    if (!hasOnlyKnownSymbols(production.rightTokens, terminalSet, nonTerminalSet)) {
+    if (strictRules && !hasOnlyKnownSymbols(production.rightTokens, terminalSet, nonTerminalSet)) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} usa simbolos fuera de ΣT o ΣNT.`,
       });
@@ -284,14 +294,14 @@ function validateRegularGrammar(
       .map((token, index) => (nonTerminalSet.has(token) ? index : -1))
       .filter((index) => index >= 0);
 
-    if (nonTerminalPositions.length > 1) {
+    if (strictRules && nonTerminalPositions.length > 1) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} no es lineal.`,
       });
       continue;
     }
 
-    if (nonTerminalPositions.length === 1) {
+    if (strictRules && nonTerminalPositions.length === 1) {
       const position = nonTerminalPositions[0]!;
 
       if (position === production.rightTokens.length - 1) {
@@ -306,7 +316,7 @@ function validateRegularGrammar(
     }
   }
 
-  if (seenLinearities.size > 1) {
+  if (strictRules && seenLinearities.size > 1) {
     issues.push({
       message: "No se puede mezclar lineal derecha con lineal izquierda en la misma gramatica.",
     });
@@ -324,6 +334,7 @@ function validateRegularGrammar(
       .filter((index) => index >= 0);
 
     if (
+      strictRules &&
       linearity === "RIGHT" &&
       nonTerminalPositions.length === 1 &&
       nonTerminalPositions[0] !== production.rightTokens.length - 1
@@ -333,7 +344,12 @@ function validateRegularGrammar(
       });
     }
 
-    if (linearity === "LEFT" && nonTerminalPositions.length === 1 && nonTerminalPositions[0] !== 0) {
+    if (
+      strictRules &&
+      linearity === "LEFT" &&
+      nonTerminalPositions.length === 1 &&
+      nonTerminalPositions[0] !== 0
+    ) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} debe dejar el no terminal al inicio.`,
       });
@@ -662,6 +678,7 @@ export function analyzeManualGrammar(input: {
   startSymbol: string;
   productions: GrammarProductionInput[];
   word: string;
+  strictRules?: boolean;
 }): GrammarManualAnalysisResult {
   const terminals = parseSymbolList(input.terminals);
   const nonTerminals = parseSymbolList(input.nonTerminals);
@@ -683,7 +700,7 @@ export function analyzeManualGrammar(input: {
     startSymbol: input.startSymbol,
     productions,
     source: "manual",
-  });
+  }, input.strictRules ?? true);
 
   return {
     validation,
@@ -694,9 +711,10 @@ export function analyzeManualGrammar(input: {
 export function analyzeAutomatonEquivalentGrammar(input: {
   automaton: AutomataData;
   word: string;
+  strictRules?: boolean;
 }): GrammarAutomatonAnalysisResult {
   const grammar = deriveGrammarFromAutomaton(input.automaton);
-  const validation = validateRegularGrammar(grammar);
+  const validation = validateRegularGrammar(grammar, input.strictRules ?? true);
 
   return {
     validation,
