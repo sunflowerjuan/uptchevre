@@ -17,7 +17,6 @@ import { Header } from "@/layout/header";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
 import { SettingsPanel } from "@/layout/settingsPanel";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
 import { analyzeAutomatonRequest } from "@/lib/automata-api";
 import type { AutomataSimulationResult } from "@/lib/automata-api";
@@ -321,15 +320,11 @@ const Index = () => {
         data={editor.data}
         exportPanel={
           <ImportExportPanel
+            triggerTooltip="Importar/Exportar"
             trigger={
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Importar/Exportar</TooltipContent>
-              </Tooltip>
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Download className="h-4 w-4" />
+              </Button>
             }
             documentName={editor.documentName}
             onImportFile={(file) => void handleImportFile(file)}

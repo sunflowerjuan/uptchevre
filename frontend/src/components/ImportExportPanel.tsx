@@ -21,6 +21,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AutomataWorkspaceDocument } from "@/lib/automata-workspace";
 import type { ReactNode } from "react";
 
@@ -33,6 +34,7 @@ export type FormalismExportSection =
 
 interface ImportExportPanelProps {
   trigger?: ReactNode;
+  triggerTooltip?: string;
   documentName: string;
   onImportFile: (file: File) => void;
   onExportJkaut: (fileName: string) => void;
@@ -61,6 +63,7 @@ function formatRecentDate(value: string) {
 
 export function ImportExportPanel({
   trigger,
+  triggerTooltip,
   documentName,
   onImportFile,
   onExportJkaut,
@@ -92,14 +95,21 @@ export function ImportExportPanel({
   return (
     <div className={trigger ? undefined : "border-t p-2"}>
       <Sheet>
-        <SheetTrigger asChild>
-          {trigger ?? (
+        {trigger ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SheetTrigger asChild>{trigger}</SheetTrigger>
+            </TooltipTrigger>
+            {triggerTooltip && <TooltipContent side="bottom">{triggerTooltip}</TooltipContent>}
+          </Tooltip>
+        ) : (
+          <SheetTrigger asChild>
             <Button type="button" variant="secondary" className="w-full justify-center gap-2">
               <PanelRightOpen className="h-4 w-4" />
               Exportar
             </Button>
-          )}
-        </SheetTrigger>
+          </SheetTrigger>
+        )}
 
         <SheetContent side="right" className="w-full p-0 sm:max-w-xl">
           <SheetHeader className="border-b px-6 py-5">
