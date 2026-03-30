@@ -28,7 +28,6 @@ import {
 } from "@/lib/automata-export";
 import { getTheorySnapshot } from "@/lib/automata";
 import { parseJkautFile, type AutomataWorkspaceDocument } from "@/lib/automata-workspace";
-import { DEFAULT_GRAMMAR_VALIDATION_SETTINGS } from "@/lib/grammar-settings";
 
 const Index = () => {
   const editor = useAutomataEditor();
@@ -37,9 +36,6 @@ const Index = () => {
   const [activeModule, setActiveModule] = useState<SidebarModule>("both");
   const [showSimulator, setShowSimulator] = useState(true);
   const [showFormalism, setShowFormalism] = useState(true);
-  const [grammarValidationSettings, setGrammarValidationSettings] = useState(
-    DEFAULT_GRAMMAR_VALIDATION_SETTINGS,
-  );
   const [lastSimulation, setLastSimulation] = useState<AutomataSimulationResult | null>(null);
   const workAreaContainerId = "uptchevere-workarea";
   const workAreaSvgId = "uptchevere-workarea-svg";
@@ -310,10 +306,8 @@ const Index = () => {
           <SettingsPanel
             showSimulator={showSimulator}
             showFormalism={showFormalism}
-            grammarValidationSettings={grammarValidationSettings}
             onShowSimulatorChange={setShowSimulator}
             onShowFormalismChange={setShowFormalism}
-            onGrammarValidationSettingsChange={setGrammarValidationSettings}
             onLoadExample={handleLoadExample}
           />
         }
@@ -327,10 +321,7 @@ const Index = () => {
           onSelectModule={setActiveModule}
           footer={
             <>
-              <GrammarPanel
-                data={editor.data}
-                validationSettings={grammarValidationSettings}
-              />
+              <GrammarPanel data={editor.data} />
               <ImportExportPanel
                 documentName={editor.documentName}
                 onImportFile={(file) => void handleImportFile(file)}
