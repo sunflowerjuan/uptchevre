@@ -5,7 +5,7 @@ import { areAutomataEquivalent } from "./automata-equivalence.js";
 import { simulateAutomaton } from "./automata-simulation.js";
 import { transformNfaToDfa } from "./automata-transformation.js";
 import { analyzeAutomatonEquivalentGrammar, analyzeManualGrammar } from "./grammar-analysis.js";
-import type { AutomataData, GrammarProductionInput } from "./types.js";
+import type { AutomataData, GrammarProductionInput, GrammarValidationSettings } from "./types.js";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -89,6 +89,7 @@ app.post("/api/grammar/manual", (req, res) => {
     startSymbol?: string;
     productions?: GrammarProductionInput[];
     word?: string;
+    validationSettings?: GrammarValidationSettings;
   };
 
   if (
@@ -111,13 +112,18 @@ app.post("/api/grammar/manual", (req, res) => {
     startSymbol: body.startSymbol,
     productions: body.productions,
     word: body.word,
+    validationSettings: body.validationSettings,
   });
 
   res.json({ ok: true, result });
 });
 
 app.post("/api/grammar/equivalent", (req, res) => {
-  const body = req.body as { automaton?: AutomataData; word?: string };
+  const body = req.body as {
+    automaton?: AutomataData;
+    word?: string;
+    validationSettings?: GrammarValidationSettings;
+  };
 
   if (!body?.automaton || typeof body.word !== "string") {
     res.status(400).json({
@@ -130,6 +136,7 @@ app.post("/api/grammar/equivalent", (req, res) => {
   const result = analyzeAutomatonEquivalentGrammar({
     automaton: body.automaton,
     word: body.word,
+    validationSettings: body.validationSettings,
   });
 
   res.json({ ok: true, result });

@@ -182,6 +182,21 @@ export interface GrammarProductionInput {
   rule: string;
 }
 
+export interface GrammarValidationSettings {
+  requireMinTerminals: boolean;
+  minTerminals: number;
+  requireMinNonTerminals: boolean;
+  minNonTerminals: number;
+  requireStartSymbolInNonTerminals: boolean;
+  requireLeftSideNonTerminal: boolean;
+  requireMinProductions: boolean;
+  minProductions: number;
+  requireKnownSymbols: boolean;
+  requireLinearity: boolean;
+  requireSingleLinearityDirection: boolean;
+  requireNonTerminalPosition: boolean;
+}
+
 export interface GrammarProduction {
   id: string;
   left: string;

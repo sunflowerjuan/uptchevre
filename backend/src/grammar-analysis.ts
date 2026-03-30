@@ -12,6 +12,7 @@ import type {
   GrammarTransformationRule,
   GrammarValidationIssue,
   GrammarValidationResult,
+  GrammarValidationSettings,
   GrammarWordAnalysis,
 } from "./types.js";
 import {
@@ -225,7 +226,10 @@ function buildThreadDiagramLines(steps: GrammarDerivationStep[]) {
     })
     .join("");
 
-  const labelLine = labels.map((label, index) => padCenter(label, widths[index]! + (index < labels.length - 1 ? 4 : 0))).join("");
+  const labelLine = labels
+    .map((label, index) => padCenter(label, widths[index]! + (index < labels.length - 1 ? 4 : 0)))
+    .join("");
+
   const symbolLine = states
     .map((_, index) => {
       const symbol = index === 0 ? "" : `Simbolo: ${symbols[index - 1] ?? EPSILON_DISPLAY}`;
@@ -236,29 +240,53 @@ function buildThreadDiagramLines(steps: GrammarDerivationStep[]) {
   return [stateLine, labelLine, symbolLine];
 }
 
+function getDefaultGrammarValidationSettings(): GrammarValidationSettings {
+  return {
+    requireMinTerminals: true,
+    minTerminals: 2,
+    requireMinNonTerminals: true,
+    minNonTerminals: 1,
+    requireStartSymbolInNonTerminals: true,
+    requireLeftSideNonTerminal: true,
+    requireMinProductions: true,
+    minProductions: 3,
+    requireKnownSymbols: true,
+    requireLinearity: true,
+    requireSingleLinearityDirection: true,
+    requireNonTerminalPosition: true,
+  };
+}
+
 function validateRegularGrammar(
-  definition: Omit<GrammarDefinition, "source" | "linearity"> & { source?: GrammarSource },
+  definition: Omit<GrammarDefinition, "source" | "linearity"> & {
+    source?: GrammarSource;
+    validationSettings?: GrammarValidationSettings;
+  },
 ): GrammarValidationResult {
   const issues: GrammarValidationIssue[] = [];
   const terminals = Array.from(new Set(definition.terminals.filter(Boolean)));
   const nonTerminals = Array.from(new Set(definition.nonTerminals.filter(Boolean)));
   const startSymbol = definition.startSymbol.trim();
   const productions = definition.productions;
+  const settings = {
+    ...getDefaultGrammarValidationSettings(),
+    ...definition.validationSettings,
+  };
 
-  if (terminals.length < 2) {
-    issues.push({ message: "La gramatica debe tener al menos 2 simbolos terminales." });
+  if (settings.requireMinTerminals && terminals.length < settings.minTerminals) {
+    issues.push({ message: `La gramatica debe tener al menos ${settings.minTerminals} simbolos terminales.` });
   }
 
-  if (nonTerminals.length < 1) {
-    issues.push({ message: "La gramatica debe tener al menos 1 simbolo no terminal." });
+  if (settings.requireMinNonTerminals && nonTerminals.length < settings.minNonTerminals) {
+    issues.push({ message: `La gramatica debe tener al menos ${settings.minNonTerminals} simbolo(s) no terminal(es).` });
   }
 
-  if (!startSymbol || !nonTerminals.includes(startSymbol)) {
+  if (settings.requireStartSymbolInNonTerminals && (!startSymbol || !nonTerminals.includes(startSymbol))) {
     issues.push({ message: "El simbolo inicial debe pertenecer al conjunto de no terminales." });
   }
 
-  if (productions.length < 1) {
-    issues.push({ message: "La gramatica debe tener al menos 1 produccion." });
+  if (settings.requireMinProductions && productions.length < settings.minProductions) {
+    issues.push({ message: `La gramatica debe tener al menos ${settings.minProductions} producciones.` });
   }
 
   const terminalSet = new Set(terminals);
@@ -266,14 +294,17 @@ function validateRegularGrammar(
   const seenLinearities = new Set<GrammarLinearity>();
 
   for (const production of productions) {
-    if (!nonTerminalSet.has(production.left)) {
+    if (settings.requireLeftSideNonTerminal && !nonTerminalSet.has(production.left)) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} tiene un lado izquierdo invalido.`,
       });
       continue;
     }
 
-    if (!hasOnlyKnownSymbols(production.rightTokens, terminalSet, nonTerminalSet)) {
+    if (
+      settings.requireKnownSymbols &&
+      !hasOnlyKnownSymbols(production.rightTokens, terminalSet, nonTerminalSet)
+    ) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} usa simbolos fuera de ΣT o ΣNT.`,
       });
@@ -284,21 +315,21 @@ function validateRegularGrammar(
       .map((token, index) => (nonTerminalSet.has(token) ? index : -1))
       .filter((index) => index >= 0);
 
-    if (nonTerminalPositions.length > 1) {
+    if (settings.requireLinearity && nonTerminalPositions.length > 1) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} no es lineal.`,
       });
       continue;
     }
 
-    if (nonTerminalPositions.length === 1) {
+    if (settings.requireLinearity && nonTerminalPositions.length === 1) {
       const position = nonTerminalPositions[0]!;
 
       if (position === production.rightTokens.length - 1) {
         seenLinearities.add("RIGHT");
       } else if (position === 0) {
         seenLinearities.add("LEFT");
-      } else {
+      } else if (settings.requireNonTerminalPosition) {
         issues.push({
           message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} debe ser lineal derecha o lineal izquierda.`,
         });
@@ -306,7 +337,7 @@ function validateRegularGrammar(
     }
   }
 
-  if (seenLinearities.size > 1) {
+  if (settings.requireSingleLinearityDirection && seenLinearities.size > 1) {
     issues.push({
       message: "No se puede mezclar lineal derecha con lineal izquierda en la misma gramatica.",
     });
@@ -324,6 +355,7 @@ function validateRegularGrammar(
       .filter((index) => index >= 0);
 
     if (
+      settings.requireNonTerminalPosition &&
       linearity === "RIGHT" &&
       nonTerminalPositions.length === 1 &&
       nonTerminalPositions[0] !== production.rightTokens.length - 1
@@ -333,7 +365,12 @@ function validateRegularGrammar(
       });
     }
 
-    if (linearity === "LEFT" && nonTerminalPositions.length === 1 && nonTerminalPositions[0] !== 0) {
+    if (
+      settings.requireNonTerminalPosition &&
+      linearity === "LEFT" &&
+      nonTerminalPositions.length === 1 &&
+      nonTerminalPositions[0] !== 0
+    ) {
       issues.push({
         message: `La produccion ${production.left} -> ${formatTokenList(production.rightTokens)} debe dejar el no terminal al inicio.`,
       });
@@ -369,11 +406,13 @@ function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, i
     sententialForm: string[];
     viaProduction?: GrammarProduction;
     parentId?: string;
-  }> = [{
-    id: "root",
-    depth: 0,
-    sententialForm: [grammar.startSymbol],
-  }];
+  }> = [
+    {
+      id: "root",
+      depth: 0,
+      sententialForm: [grammar.startSymbol],
+    },
+  ];
   const visited = new Set<string>([`0:${grammar.startSymbol}`]);
   const snapshots = new Map<string, GrammarDerivationStep>();
   const parents = new Map<string, { parentId?: string }>();
@@ -512,7 +551,11 @@ function buildAutomatonProductions(
           if (!target) return;
 
           productions.push({
-            id: makeProductionId(item.nonTerminal, [symbol, target.nonTerminal], stateIndex * 1000 + symbolIndex * 100 + targetIndex),
+            id: makeProductionId(
+              item.nonTerminal,
+              [symbol, target.nonTerminal],
+              stateIndex * 1000 + symbolIndex * 100 + targetIndex,
+            ),
             left: item.nonTerminal,
             rightTokens: [symbol, target.nonTerminal],
             source: "automaton",
@@ -527,7 +570,7 @@ function buildAutomatonProductions(
           left: item.nonTerminal,
           rightTokens: [],
           source: "automaton",
-          note: `Algún estado de ε-clausura(${item.stateName}) es de aceptación, por eso ${item.nonTerminal} -> ${EPSILON_DISPLAY}.`,
+          note: `Algun estado de ε-clausura(${item.stateName}) es de aceptacion, por eso ${item.nonTerminal} -> ${EPSILON_DISPLAY}.`,
         });
       }
     });
@@ -560,7 +603,7 @@ function buildAutomatonProductions(
         left: item.nonTerminal,
         rightTokens: [],
         source: "automaton",
-        note: `El estado ${item.stateName} es de aceptación, por eso ${item.nonTerminal} -> ${EPSILON_DISPLAY}.`,
+        note: `El estado ${item.stateName} es de aceptacion, por eso ${item.nonTerminal} -> ${EPSILON_DISPLAY}.`,
       });
     });
 
@@ -616,11 +659,11 @@ function getTransformationRules(type: AutomatonType): GrammarTransformationRule[
       ...common,
       {
         title: "Transiciones deterministas",
-        description: "Cada transición δ(q, a) = p genera exactamente una producción q -> a p.",
+        description: "Cada transicion δ(q, a) = p genera exactamente una produccion q -> a p.",
       },
       {
-        title: "Aceptación",
-        description: "Si un estado q pertenece a F, entonces se agrega la producción q -> ε.",
+        title: "Aceptacion",
+        description: "Si un estado q pertenece a F, entonces se agrega la produccion q -> ε.",
       },
     ];
   }
@@ -630,11 +673,11 @@ function getTransformationRules(type: AutomatonType): GrammarTransformationRule[
       ...common,
       {
         title: "Transiciones no deterministas",
-        description: "Por cada estado p en δ(q, a), se agrega una producción q -> a p.",
+        description: "Por cada estado p en δ(q, a), se agrega una produccion q -> a p.",
       },
       {
-        title: "Aceptación",
-        description: "Si un estado q pertenece a F, entonces se agrega la producción q -> ε.",
+        title: "Aceptacion",
+        description: "Si un estado q pertenece a F, entonces se agrega la produccion q -> ε.",
       },
     ];
   }
@@ -643,15 +686,15 @@ function getTransformationRules(type: AutomatonType): GrammarTransformationRule[
     ...common,
     {
       title: "ε-clausura",
-      description: "Primero se calcula ε-clausura(q) para cada estado antes de construir las producciones con símbolos visibles.",
+      description: "Primero se calcula ε-clausura(q) para cada estado antes de construir las producciones con simbolos visibles.",
     },
     {
       title: "Producciones visibles",
-      description: "Para cada símbolo a, se agregan producciones q -> a p donde p pertenece a ε-clausura(move(ε-clausura(q), a)).",
+      description: "Para cada simbolo a, se agregan producciones q -> a p donde p pertenece a ε-clausura(move(ε-clausura(q), a)).",
     },
     {
-      title: "Aceptación por clausura",
-      description: "Si algún estado de ε-clausura(q) es de aceptación, entonces se agrega q -> ε.",
+      title: "Aceptacion por clausura",
+      description: "Si algun estado de ε-clausura(q) es de aceptacion, entonces se agrega q -> ε.",
     },
   ];
 }
@@ -662,6 +705,7 @@ export function analyzeManualGrammar(input: {
   startSymbol: string;
   productions: GrammarProductionInput[];
   word: string;
+  validationSettings?: GrammarValidationSettings;
 }): GrammarManualAnalysisResult {
   const terminals = parseSymbolList(input.terminals);
   const nonTerminals = parseSymbolList(input.nonTerminals);
@@ -683,6 +727,7 @@ export function analyzeManualGrammar(input: {
     startSymbol: input.startSymbol,
     productions,
     source: "manual",
+    validationSettings: input.validationSettings,
   });
 
   return {
@@ -694,9 +739,13 @@ export function analyzeManualGrammar(input: {
 export function analyzeAutomatonEquivalentGrammar(input: {
   automaton: AutomataData;
   word: string;
+  validationSettings?: GrammarValidationSettings;
 }): GrammarAutomatonAnalysisResult {
   const grammar = deriveGrammarFromAutomaton(input.automaton);
-  const validation = validateRegularGrammar(grammar);
+  const validation = validateRegularGrammar({
+    ...grammar,
+    validationSettings: input.validationSettings,
+  });
 
   return {
     validation,

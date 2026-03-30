@@ -152,6 +152,21 @@ export interface GrammarProductionInput {
   rule: string;
 }
 
+export interface GrammarValidationSettings {
+  requireMinTerminals: boolean;
+  minTerminals: number;
+  requireMinNonTerminals: boolean;
+  minNonTerminals: number;
+  requireStartSymbolInNonTerminals: boolean;
+  requireLeftSideNonTerminal: boolean;
+  requireMinProductions: boolean;
+  minProductions: number;
+  requireKnownSymbols: boolean;
+  requireLinearity: boolean;
+  requireSingleLinearityDirection: boolean;
+  requireNonTerminalPosition: boolean;
+}
+
 export interface GrammarProduction {
   id: string;
   left: string;
@@ -241,10 +256,19 @@ export async function analyzeManualGrammarRequest(payload: {
   startSymbol: string;
   productions: GrammarProductionInput[];
   word: string;
+  validationSettings?: GrammarValidationSettings;
 }) {
   return postJson<GrammarManualAnalysisResult>("/api/grammar/manual", payload);
 }
 
-export async function analyzeEquivalentGrammarRequest(automaton: AutomataData, word: string) {
-  return postJson<GrammarAutomatonAnalysisResult>("/api/grammar/equivalent", { automaton, word });
+export async function analyzeEquivalentGrammarRequest(
+  automaton: AutomataData,
+  word: string,
+  validationSettings?: GrammarValidationSettings,
+) {
+  return postJson<GrammarAutomatonAnalysisResult>("/api/grammar/equivalent", {
+    automaton,
+    word,
+    validationSettings,
+  });
 }
