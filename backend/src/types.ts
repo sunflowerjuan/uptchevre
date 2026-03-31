@@ -1,14 +1,23 @@
 /**
- * Contrato formal compartido por las operaciones teóricas del backend.
+ * Contratos formales compartidos por las operaciones teóricas del backend.
  *
- * Todas las funciones del backend parten del mismo modelo:
- * A = (Q, SIGMA, DELTA, q0, F)
+ * Idea central:
+ * Todo el sistema modela autómatas usando la 5-tupla clásica:
  *
- * Estas interfaces sirven para representar:
- * - el automata base dibujado por el usuario
- * - la proyección formal que consume la interfaz
- * - los pasos de simulación de la función de transición extendida
- * - las trazas concretas de aceptación y rechazo
+ * A = (Q, Σ, δ, q0, F)
+ *
+ * Estas interfaces no solo representan el autómata base dibujado por el
+ * usuario, sino también las distintas proyecciones que el motor lógico genera
+ * para explicar análisis, simulaciones y equivalencia.
+ */
+
+/**
+ * Estado del autómata tal como se almacena en el editor y se consume en el
+ * backend.
+ *
+ * Notas:
+ * - `x` y `y` son metadatos visuales del canvas.
+ * - `isInitial` e `isAccept` proyectan la pertenencia a `{q0}` y `F`.
  */
 export interface AutomataState {
   id: string;
@@ -19,31 +28,46 @@ export interface AutomataState {
   isAccept: boolean;
 }
 
+/**
+ * Transición elemental del autómata.
+ *
+ * Convención del proyecto:
+ * - `symbol = ""` representa una transición por ε.
+ * - cualquier otro string representa un símbolo visible del alfabeto Σ.
+ */
 export interface AutomataTransition {
   id: string;
   from: string;
   to: string;
-  /**
-   * Símbolo consumido por la transición.
-   *
-   * Convención del proyecto:
-   * - ""  equivale a \u03b5
-   * - cualquier otro string representa un s\u00edmbolo ordinario de \u03a3
-   */
   symbol: string;
 }
 
+/**
+ * Modelo global del autómata que viaja entre frontend y backend.
+ *
+ * Componentes:
+ * - `states`: conjunto finito Q.
+ * - `transitions`: relación operativa a partir de la cual se reconstruye δ.
+ * - `alphabet`: declaración explícita opcional de Σ; si no está completa, el
+ *   backend puede inferirla desde las transiciones.
+ */
 export interface AutomataData {
-  // conjunto finito de estados. 
   states: AutomataState[];
-  // Relación operativa usada para construir funcion de transicion.
   transitions: AutomataTransition[];
-  // alfabeto de entrada explícito o inferido desde las transiciones. */
   alphabet: string[];
 }
 
+/**
+ * Clasificación estructural del autómata detectada por el backend.
+ */
 export type AutomatonType = "DFA" | "NFA" | "NFA_EPSILON";
 
+/**
+ * Descriptor de estado listo para consumo en la interfaz.
+ *
+ * A diferencia de `AutomataState`, esta estructura elimina coordenadas y deja
+ * solo la información formal relevante para los paneles teóricos.
+ */
 export interface StateDescriptor {
   id: string;
   name: string;
@@ -51,6 +75,9 @@ export interface StateDescriptor {
   isAccept: boolean;
 }
 
+/**
+ * Descriptor serializado de transición para vistas formales.
+ */
 export interface TransitionDescriptor {
   fromId: string;
   fromName: string;
@@ -60,6 +87,9 @@ export interface TransitionDescriptor {
   displaySymbol: string;
 }
 
+/**
+ * Incidencia que explica por qué un autómata no puede tratarse como DFA.
+ */
 export interface DeterminismIssueDescriptor {
   stateId: string;
   stateName: string;
@@ -68,6 +98,9 @@ export interface DeterminismIssueDescriptor {
   targets: string[];
 }
 
+/**
+ * Resultado serializado de una clausura-ε por estado.
+ */
 export interface EClosureDescriptor {
   stateId: string;
   stateName: string;
@@ -75,8 +108,17 @@ export interface EClosureDescriptor {
   closureNames: string[];
 }
 
+/**
+ * Resultado consolidado del análisis estructural del autómata.
+ *
+ * Este contrato actúa como base para varios módulos de interfaz:
+ * - formalismo,
+ * - simulación,
+ * - transformación,
+ * - minimización,
+ * - gramáticas equivalentes.
+ */
 export interface AutomataAnalysisResult {
-  // Clasificación estructural: DFA, NFA o NFA-ε. 
   automatonType: AutomatonType;
   alphabet: string[];
   states: StateDescriptor[];
@@ -89,12 +131,16 @@ export interface AutomataAnalysisResult {
 }
 
 /**
- * Paso observable de la función de transición extendida .
- * - reachable = resultado inmediato de aplicar move con el símbolo actual
- * - closure   = resultado final tras aplicar clausura-ε
- * En DFA, reachable y closure contienen un único estado.
- * En NFA, closure coincide con reachable.
- * En NFA-e, closure puede expandirse más allá de reachable.
+ * Paso observable de la función de transición extendida `δ*`.
+ *
+ * Significado de campos:
+ * - `reachable`: resultado inmediato de consumir el símbolo actual.
+ * - `closure`: resultado final tras expandir por ε cuando el modelo lo permite.
+ *
+ * Interpretación por tipo de autómata:
+ * - En DFA, `reachable` y `closure` suelen contener un único estado.
+ * - En NFA, `closure` coincide con `reachable`.
+ * - En NFA-ε, `closure` puede expandirse más allá de `reachable`.
  */
 export interface DeltaStarStep {
   index: number;
@@ -107,7 +153,9 @@ export interface DeltaStarStep {
   closureStateNames: string[];
 }
 
-// Paso elemental de una traza concreta sobre una palabra. 
+/**
+ * Paso individual de un camino concreto sobre una palabra.
+ */
 export interface SimulationPathStep {
   fromId: string;
   fromName: string;
@@ -118,7 +166,12 @@ export interface SimulationPathStep {
   consumedIndex: number;
 }
 
-// Camino concreto seguido por la simulación para explicar aceptación o rechazo.
+/**
+ * Recorrido concreto usado para explicar aceptación o rechazo.
+ *
+ * A diferencia de `DeltaStarStep`, aquí se conserva una sola rama explícita de
+ * ejecución para fines pedagógicos.
+ */
 export interface SimulationPath {
   stateIds: string[];
   stateNames: string[];
@@ -128,7 +181,9 @@ export interface SimulationPath {
   haltedAtIndex: number;
 }
 
-// Resultado final de aplicar FTE a una palabra.
+/**
+ * Resultado completo de la simulación de una palabra.
+ */
 export interface AutomataSimulationResult {
   automatonType: AutomatonType;
   accepted: boolean;
@@ -137,4 +192,3 @@ export interface AutomataSimulationResult {
   acceptedPaths: SimulationPath[];
   rejectedPaths: SimulationPath[];
 }
-
