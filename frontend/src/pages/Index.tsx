@@ -4,6 +4,7 @@ import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { useAutomataEditor } from "@/hooks/useAutomataEditor";
 import { ImportExportPanel } from "@/components/ImportExportPanel";
 import { GrammarPanel } from "@/components/GrammarPanel";
+import { DfaMinimizationPanel } from "@/components/DfaMinimizationPanel";
 import type { FormalismExportSection } from "@/components/ImportExportPanel";
 import { WorkArea } from "@/components/WorkArea";
 import { FormalismPanel } from "@/components/FormalismPanel";
@@ -80,6 +81,15 @@ const Index = () => {
     toast({
       title: "AFD cargado",
       description: "El autómata determinista se cargó en el editor.",
+    });
+  }, [editor]);
+
+  const handleLoadMinimizedDfa = useCallback((dfa: AutomataData) => {
+    editor.loadAutomaton(dfa, { name: `${editor.documentName} (mín)` });
+    setHighlightedStates(new Set());
+    toast({
+      title: "DFA minimizado cargado",
+      description: "El autómata minimizado se cargó en el editor.",
     });
   }, [editor]);
 
@@ -463,6 +473,17 @@ const Index = () => {
                   onPersistedNfaToDfaChange={handlePersistedNfaToDfaChange}
                   transformationView={transformationView}
                   onTransformationViewChange={handleTransformationViewChange}
+                />
+              </div>
+            )}
+
+            {activeModule === "minimization" && (
+              <div className="border-t">
+                <DfaMinimizationPanel
+                  data={editor.data}
+                  analysis={analysisQuery.data}
+                  analysisLoading={analysisQuery.isLoading}
+                  onLoadMinimizedDfa={handleLoadMinimizedDfa}
                 />
               </div>
             )}

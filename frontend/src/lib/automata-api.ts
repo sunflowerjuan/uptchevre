@@ -144,6 +144,109 @@ export interface NfaToDfaTransformationResult {
   }[];
 }
 
+export interface DfaMinimizationOriginalFormalism {
+  states: string[];
+  alphabet: string[];
+  initialState: string;
+  acceptStates: string[];
+}
+
+export interface DfaPartitionGroup {
+  id: string;
+  stateIds: string[];
+  stateNames: string[];
+}
+
+export interface DfaPartitionSplitCause {
+  groupId: string;
+  stateAId: string;
+  stateAName: string;
+  stateBId: string;
+  stateBName: string;
+  symbol: string;
+  targetAStateId: string;
+  targetAStateName: string;
+  targetBStateId: string;
+  targetBStateName: string;
+  targetAGroupId: string;
+  targetBGroupId: string;
+}
+
+export interface DfaPartitionIteration {
+  iteration: number;
+  beforeGroups: DfaPartitionGroup[];
+  afterGroups: DfaPartitionGroup[];
+  splitCauses: DfaPartitionSplitCause[];
+  stabilized: boolean;
+}
+
+export type DfaDistinguishabilityCellStatus = "pending" | "distinguishable" | "equivalent";
+
+export interface DfaDistinguishabilityCell {
+  rowStateId: string;
+  rowStateName: string;
+  columnStateId: string;
+  columnStateName: string;
+  status: DfaDistinguishabilityCellStatus;
+  reason?: string;
+  markedInIteration?: number;
+}
+
+export interface DfaDistinguishabilityIteration {
+  iteration: number;
+  cells: DfaDistinguishabilityCell[];
+}
+
+export interface DfaEquivalenceSymbolCheck {
+  symbol: string;
+  mappings: {
+    stateId: string;
+    stateName: string;
+    targetStateId: string;
+    targetStateName: string;
+    targetClassName: string;
+  }[];
+}
+
+export interface DfaEquivalenceClass {
+  className: string;
+  stateIds: string[];
+  stateNames: string[];
+  explanation: string;
+  symbolChecks: DfaEquivalenceSymbolCheck[];
+}
+
+export interface DfaMinimizedTransitionRow {
+  className: string;
+  memberStateIds: string[];
+  memberStateNames: string[];
+  isInitial: boolean;
+  isAccept: boolean;
+  transitions: {
+    symbol: string;
+    targetClassName: string;
+    targetStateId: string;
+    targetStateName: string;
+  }[];
+}
+
+export interface DfaMinimizedFormalism {
+  states: string[];
+  alphabet: string[];
+  initialState: string;
+  acceptStates: string[];
+}
+
+export interface DfaMinimizationResult {
+  originalFormalism: DfaMinimizationOriginalFormalism;
+  partitionIterations: DfaPartitionIteration[];
+  distinguishabilityIterations: DfaDistinguishabilityIteration[];
+  equivalenceClasses: DfaEquivalenceClass[];
+  minimizedFormalism: DfaMinimizedFormalism;
+  minimizedTransitionTable: DfaMinimizedTransitionRow[];
+  minimizedDfa: AutomataData;
+}
+
 export type GrammarSource = "manual" | "automaton";
 export type GrammarLinearity = "RIGHT" | "LEFT";
 
@@ -233,6 +336,10 @@ export async function simulateAutomatonRequest(automaton: AutomataData, word: st
 
 export async function transformNfaToDfaRequest(automaton: AutomataData) {
   return postJson<NfaToDfaTransformationResult>("/api/automata/transform", { automaton });
+}
+
+export async function minimizeDfaRequest(automaton: AutomataData) {
+  return postJson<DfaMinimizationResult>("/api/automata/minimize", { automaton });
 }
 
 export async function analyzeManualGrammarRequest(payload: {
