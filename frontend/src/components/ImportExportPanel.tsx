@@ -16,11 +16,14 @@ import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AutomataWorkspaceDocument } from "@/lib/automata-workspace";
+import type { ReactNode } from "react";
 
 export type FormalismExportSection =
   | "full"
@@ -30,6 +33,8 @@ export type FormalismExportSection =
   | "closure";
 
 interface ImportExportPanelProps {
+  trigger?: ReactNode;
+  triggerTooltip?: string;
   documentName: string;
   onImportFile: (file: File) => void;
   onExportJkaut: (fileName: string) => void;
@@ -57,6 +62,8 @@ function formatRecentDate(value: string) {
 }
 
 export function ImportExportPanel({
+  trigger,
+  triggerTooltip,
   documentName,
   onImportFile,
   onExportJkaut,
@@ -86,18 +93,30 @@ export function ImportExportPanel({
   const effectiveFileName = exportFileName.trim() || "A";
 
   return (
-    <div className="border-t p-2">
+    <div className={trigger ? undefined : "border-t p-2"}>
       <Sheet>
-        <SheetTrigger asChild>
-          <Button type="button" variant="secondary" className="w-full justify-center gap-2">
-            <PanelRightOpen className="h-4 w-4" />
-            Exportar
-          </Button>
-        </SheetTrigger>
+        {trigger ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SheetTrigger asChild>{trigger}</SheetTrigger>
+            </TooltipTrigger>
+            {triggerTooltip && <TooltipContent side="bottom">{triggerTooltip}</TooltipContent>}
+          </Tooltip>
+        ) : (
+          <SheetTrigger asChild>
+            <Button type="button" variant="secondary" className="w-full justify-center gap-2">
+              <PanelRightOpen className="h-4 w-4" />
+              Exportar
+            </Button>
+          </SheetTrigger>
+        )}
 
         <SheetContent side="right" className="w-full p-0 sm:max-w-xl">
           <SheetHeader className="border-b px-6 py-5">
             <SheetTitle>Exportar e importar</SheetTitle>
+            <SheetDescription>
+              Gestiona archivos del editor y exporta diagrama, formalismo y simulacion.
+            </SheetDescription>
           </SheetHeader>
 
           <div className="h-[calc(100vh-88px)] overflow-y-auto px-6 py-5">

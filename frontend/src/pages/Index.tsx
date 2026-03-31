@@ -3,14 +3,21 @@ import { useQuery } from "@tanstack/react-query";
 import type { AutomataData } from "@/hooks/useAutomataEditor";
 import { useAutomataEditor } from "@/hooks/useAutomataEditor";
 import { ImportExportPanel } from "@/components/ImportExportPanel";
+import { GrammarPanel } from "@/components/GrammarPanel";
+import { DfaMinimizationPanel } from "@/components/DfaMinimizationPanel";
 import type { FormalismExportSection } from "@/components/ImportExportPanel";
 import { WorkArea } from "@/components/WorkArea";
 import { FormalismPanel } from "@/components/FormalismPanel";
 import { StringSimulator } from "@/components/StringSimulator";
+import {
+  TransformationPanel,
+  type PersistedNfaToDfaState,
+} from "@/components/TransformationPanel";
 import { EditorToolbar } from "@/components/EditorToolbar";
 import { Header } from "@/layout/header";
 import { Sidebar, type SidebarModule } from "@/layout/Sidebar";
 import { SettingsPanel } from "@/layout/settingsPanel";
+import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { analyzeAutomatonRequest } from "@/lib/automata-api";
 import type { AutomataSimulationResult } from "@/lib/automata-api";
@@ -26,6 +33,7 @@ import {
 } from "@/lib/automata-export";
 import { getTheorySnapshot } from "@/lib/automata";
 import { parseJkautFile, type AutomataWorkspaceDocument } from "@/lib/automata-workspace";
+import { Download, Sigma } from "lucide-react";
 
 const Index = () => {
   const editor = useAutomataEditor();
@@ -34,7 +42,11 @@ const Index = () => {
   const [activeModule, setActiveModule] = useState<SidebarModule>("both");
   const [showSimulator, setShowSimulator] = useState(true);
   const [showFormalism, setShowFormalism] = useState(true);
+  const [strictGrammarRules, setStrictGrammarRules] = useState(true);
   const [lastSimulation, setLastSimulation] = useState<AutomataSimulationResult | null>(null);
+  /** Conserva AFN/AFD de la conversión al cambiar de módulo en la barra lateral (el panel se desmonta). */
+  const [persistedNfaToDfa, setPersistedNfaToDfa] = useState<PersistedNfaToDfaState | null>(null);
+  const [transformationView, setTransformationView] = useState<"nfa" | "dfa">("nfa");
   const workAreaContainerId = "uptchevere-workarea";
   const workAreaSvgId = "uptchevere-workarea-svg";
   const formalismExportId = "uptchevere-formalism-export";
@@ -54,6 +66,32 @@ const Index = () => {
   const handleHighlight = useCallback((states: Set<string>) => {
     setHighlightedStates(states);
   }, []);
+
+  const handlePersistedNfaToDfaChange = useCallback((next: PersistedNfaToDfaState | null) => {
+    setPersistedNfaToDfa(next);
+  }, []);
+
+  const handleTransformationViewChange = useCallback((next: "nfa" | "dfa") => {
+    setTransformationView(next);
+  }, []);
+
+  const handleLoadConvertedDfa = useCallback((dfa: AutomataData) => {
+    editor.loadAutomaton(dfa, { name: `${editor.documentName} (AFD)` });
+    setHighlightedStates(new Set());
+    toast({
+      title: "AFD cargado",
+      description: "El autómata determinista se cargó en el editor.",
+    });
+  }, [editor]);
+
+  const handleLoadMinimizedDfa = useCallback((dfa: AutomataData) => {
+    editor.loadAutomaton(dfa, { name: `${editor.documentName} (mín)` });
+    setHighlightedStates(new Set());
+    toast({
+      title: "DFA minimizado cargado",
+      description: "El autómata minimizado se cargó en el editor.",
+    });
+  }, [editor]);
 
   const handleLoadExample = useCallback((example: AutomataData, title: string) => {
     editor.loadAutomaton(example, { name: title });
@@ -290,12 +328,50 @@ const Index = () => {
         onUndo={editor.undo}
         onRedo={editor.redo}
         data={editor.data}
+        exportPanel={
+          <ImportExportPanel
+            triggerTooltip="Importar/Exportar"
+            trigger={
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Download className="h-4 w-4" />
+              </Button>
+            }
+            documentName={editor.documentName}
+            onImportFile={(file) => void handleImportFile(file)}
+            onExportJkaut={handleExportJkaut}
+            onExportDiagramSvg={handleExportDiagramSvg}
+            onExportDiagramPng={(fileName) => void handleExportDiagramPng(fileName)}
+            onCopyDiagram={() => void handleCopyDiagram()}
+            onExportFormalismMarkdown={handleExportFormalismMarkdown}
+            onExportFormalismImage={(fileName, section) => void handleExportFormalismImage(fileName, section)}
+            onCopyFormalism={(section) => void handleCopyFormalism(section)}
+            onExportSimulationMarkdown={handleExportSimulationMarkdown}
+            onExportSimulationPdf={(fileName) => void handleExportSimulationPdf(fileName)}
+            recentDocuments={editor.recentDocuments}
+            onOpenRecent={handleOpenRecent}
+            canExportDiagram={editor.data.states.length > 0}
+            canExportFormalism={Boolean(
+              analysisQuery.data &&
+                showFormalism &&
+                (activeModule === "both" || activeModule === "formalism"),
+            )}
+            canExportSimulation={Boolean(
+              analysisQuery.data &&
+                lastSimulation &&
+                showSimulator &&
+                (activeModule === "both" || activeModule === "simulator"),
+            )}
+            supportsEpsilon={Boolean(analysisQuery.data?.supportsEpsilon)}
+          />
+        }
         settingsPanel={
           <SettingsPanel
             showSimulator={showSimulator}
             showFormalism={showFormalism}
+            strictGrammarRules={strictGrammarRules}
             onShowSimulatorChange={setShowSimulator}
             onShowFormalismChange={setShowFormalism}
+            onStrictGrammarRulesChange={setStrictGrammarRules}
             onLoadExample={handleLoadExample}
           />
         }
@@ -307,34 +383,20 @@ const Index = () => {
           activeModule={activeModule}
           onToggle={() => setSidebarCollapsed((prev) => !prev)}
           onSelectModule={setActiveModule}
-          footer={
-            <ImportExportPanel
-              documentName={editor.documentName}
-              onImportFile={(file) => void handleImportFile(file)}
-              onExportJkaut={handleExportJkaut}
-              onExportDiagramSvg={handleExportDiagramSvg}
-              onExportDiagramPng={(fileName) => void handleExportDiagramPng(fileName)}
-              onCopyDiagram={() => void handleCopyDiagram()}
-              onExportFormalismMarkdown={handleExportFormalismMarkdown}
-              onExportFormalismImage={(fileName, section) => void handleExportFormalismImage(fileName, section)}
-              onCopyFormalism={(section) => void handleCopyFormalism(section)}
-              onExportSimulationMarkdown={handleExportSimulationMarkdown}
-              onExportSimulationPdf={(fileName) => void handleExportSimulationPdf(fileName)}
-              recentDocuments={editor.recentDocuments}
-              onOpenRecent={handleOpenRecent}
-              canExportDiagram={editor.data.states.length > 0}
-              canExportFormalism={Boolean(
-                analysisQuery.data &&
-                  showFormalism &&
-                  (activeModule === "both" || activeModule === "formalism"),
-              )}
-              canExportSimulation={Boolean(
-                analysisQuery.data &&
-                  lastSimulation &&
-                  showSimulator &&
-                  (activeModule === "both" || activeModule === "simulator"),
-              )}
-              supportsEpsilon={Boolean(analysisQuery.data?.supportsEpsilon)}
+          secondaryTools={
+            <GrammarPanel
+              data={editor.data}
+              strictGrammarRules={strictGrammarRules}
+              trigger={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`w-full ${sidebarCollapsed ? "justify-center px-2" : "justify-start gap-2"}`}
+                >
+                  <Sigma className="h-4 w-4" />
+                  {!sidebarCollapsed && <span className="text-xs">Gramaticas</span>}
+                </Button>
+              }
             />
           }
         />
@@ -396,6 +458,32 @@ const Index = () => {
                   analysis={analysisQuery.data}
                   isLoading={analysisQuery.isLoading}
                   error={analysisQuery.error instanceof Error ? analysisQuery.error.message : null}
+                />
+              </div>
+            )}
+
+            {activeModule === "conversion" && (
+              <div className="border-t">
+                <TransformationPanel
+                  data={editor.data}
+                  analysis={analysisQuery.data}
+                  analysisLoading={analysisQuery.isLoading}
+                  onLoadDfa={handleLoadConvertedDfa}
+                  persistedNfaToDfa={persistedNfaToDfa}
+                  onPersistedNfaToDfaChange={handlePersistedNfaToDfaChange}
+                  transformationView={transformationView}
+                  onTransformationViewChange={handleTransformationViewChange}
+                />
+              </div>
+            )}
+
+            {activeModule === "minimization" && (
+              <div className="border-t">
+                <DfaMinimizationPanel
+                  data={editor.data}
+                  analysis={analysisQuery.data}
+                  analysisLoading={analysisQuery.isLoading}
+                  onLoadMinimizedDfa={handleLoadMinimizedDfa}
                 />
               </div>
             )}

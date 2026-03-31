@@ -17,9 +17,10 @@ interface HeaderProps {
   onRedo: () => void;
   data: AutomataData;
   settingsPanel: ReactNode;
+  exportPanel?: ReactNode;
 }
 
-export function Header({ onUndo, onRedo, data, settingsPanel }: HeaderProps) {
+export function Header({ onUndo, onRedo, data, settingsPanel, exportPanel }: HeaderProps) {
   return (
     <header className="flex items-center justify-between border-b bg-card px-5 py-3">
       <div className="flex items-center gap-3">
@@ -76,6 +77,8 @@ export function Header({ onUndo, onRedo, data, settingsPanel }: HeaderProps) {
             <div className="h-[calc(100vh-88px)]">{settingsPanel}</div>
           </SheetContent>
         </Sheet>
+
+        {exportPanel}
       </div>
 
       <div className="hidden text-xs text-muted-foreground sm:block">

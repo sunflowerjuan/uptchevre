@@ -14,16 +14,20 @@ import { displayWord } from "@/lib/automata";
 interface SettingsPanelProps {
   showFormalism: boolean;
   showSimulator: boolean;
+  strictGrammarRules: boolean;
   onShowFormalismChange: (checked: boolean) => void;
   onShowSimulatorChange: (checked: boolean) => void;
+  onStrictGrammarRulesChange: (checked: boolean) => void;
   onLoadExample: (data: AutomataData, title: string) => void;
 }
 
 export function SettingsPanel({
   showFormalism,
   showSimulator,
+  strictGrammarRules,
   onShowFormalismChange,
   onShowSimulatorChange,
+  onStrictGrammarRulesChange,
   onLoadExample,
 }: SettingsPanelProps) {
   const { theme = "system", setTheme } = useTheme();
@@ -123,6 +127,16 @@ export function SettingsPanel({
                   </p>
                 </div>
                 <Switch checked={showFormalism} onCheckedChange={onShowFormalismChange} />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm">
+                <div>
+                  <p className="font-medium text-foreground">Reglas estrictas de gramaticas</p>
+                  <p className="text-xs text-muted-foreground">
+                    Activa o desactiva en conjunto las validaciones de terminales, no terminales y producciones minimas.
+                  </p>
+                </div>
+                <Switch checked={strictGrammarRules} onCheckedChange={onStrictGrammarRulesChange} />
               </div>
             </section>
 

@@ -116,10 +116,251 @@ export interface AutomataSimulationResult {
   rejectedPaths: SimulationPath[];
 }
 
+export interface TransformationTableRow {
+  dfaStateId: string;
+  dfaStateName: string;
+  nfaStateIds: string[];
+  nfaStateNames: string[];
+  transitions: {
+    symbol: string;
+    moveNfaStateNames: string[];
+    eClosureNfaStateNames: string[];
+    targetDfaStateId: string;
+    targetDfaStateName: string;
+  }[];
+  isInitial: boolean;
+  isAccept: boolean;
+}
+
+export interface NfaToDfaTransformationResult {
+  originalType: AutomatonType;
+  dfa: AutomataData;
+  transformationTable: TransformationTableRow[];
+  stateMapping: {
+    dfaStateId: string;
+    dfaStateName: string;
+    nfaStateIds: string[];
+    nfaStateNames: string[];
+  }[];
+}
+
+export interface DfaMinimizationOriginalFormalism {
+  states: string[];
+  alphabet: string[];
+  initialState: string;
+  acceptStates: string[];
+}
+
+export interface DfaPartitionGroup {
+  id: string;
+  stateIds: string[];
+  stateNames: string[];
+}
+
+export interface DfaPartitionSplitCause {
+  groupId: string;
+  stateAId: string;
+  stateAName: string;
+  stateBId: string;
+  stateBName: string;
+  symbol: string;
+  targetAStateId: string;
+  targetAStateName: string;
+  targetBStateId: string;
+  targetBStateName: string;
+  targetAGroupId: string;
+  targetBGroupId: string;
+}
+
+export interface DfaPartitionIteration {
+  iteration: number;
+  beforeGroups: DfaPartitionGroup[];
+  afterGroups: DfaPartitionGroup[];
+  splitCauses: DfaPartitionSplitCause[];
+  stabilized: boolean;
+}
+
+export type DfaDistinguishabilityCellStatus = "pending" | "distinguishable" | "equivalent";
+
+export interface DfaDistinguishabilityCell {
+  rowStateId: string;
+  rowStateName: string;
+  columnStateId: string;
+  columnStateName: string;
+  status: DfaDistinguishabilityCellStatus;
+  reason?: string;
+  markedInIteration?: number;
+}
+
+export interface DfaDistinguishabilityIteration {
+  iteration: number;
+  cells: DfaDistinguishabilityCell[];
+}
+
+export interface DfaEquivalenceSymbolCheck {
+  symbol: string;
+  mappings: {
+    stateId: string;
+    stateName: string;
+    targetStateId: string;
+    targetStateName: string;
+    targetClassName: string;
+  }[];
+}
+
+export interface DfaEquivalenceClass {
+  className: string;
+  stateIds: string[];
+  stateNames: string[];
+  explanation: string;
+  symbolChecks: DfaEquivalenceSymbolCheck[];
+}
+
+export interface DfaMinimizedTransitionRow {
+  className: string;
+  memberStateIds: string[];
+  memberStateNames: string[];
+  isInitial: boolean;
+  isAccept: boolean;
+  transitions: {
+    symbol: string;
+    targetClassName: string;
+    targetStateId: string;
+    targetStateName: string;
+  }[];
+}
+
+export interface DfaMinimizedFormalism {
+  states: string[];
+  alphabet: string[];
+  initialState: string;
+  acceptStates: string[];
+}
+
+export interface DfaMinimizationResult {
+  originalFormalism: DfaMinimizationOriginalFormalism;
+  partitionIterations: DfaPartitionIteration[];
+  distinguishabilityIterations: DfaDistinguishabilityIteration[];
+  equivalenceClasses: DfaEquivalenceClass[];
+  minimizedFormalism: DfaMinimizedFormalism;
+  minimizedTransitionTable: DfaMinimizedTransitionRow[];
+  minimizedDfa: AutomataData;
+}
+
+export type GrammarSource = "manual" | "automaton";
+export type GrammarLinearity = "RIGHT" | "LEFT";
+
+export interface GrammarProductionInput {
+  left: string;
+  rule: string;
+}
+
+export interface GrammarProduction {
+  id: string;
+  left: string;
+  rightTokens: string[];
+  source: GrammarSource;
+  note?: string;
+}
+
+export interface GrammarStateMapping {
+  stateId: string;
+  stateName: string;
+  nonTerminal: string;
+  isInitial: boolean;
+  isAccept: boolean;
+}
+
+export interface GrammarDefinition {
+  terminals: string[];
+  nonTerminals: string[];
+  startSymbol: string;
+  productions: GrammarProduction[];
+  source: GrammarSource;
+  linearity: GrammarLinearity;
+  stateMapping?: GrammarStateMapping[];
+  derivedFromAutomatonType?: AutomatonType;
+}
+
+export interface GrammarValidationIssue {
+  message: string;
+}
+
+export interface GrammarValidationResult {
+  grammar?: GrammarDefinition;
+  issues: GrammarValidationIssue[];
+}
+
+export interface GrammarDerivationStep {
+  id: string;
+  sententialForm: string[];
+  sententialLabel: string;
+  production?: GrammarProduction;
+  appliedNonTerminal?: string;
+  consumedSymbol?: string | null;
+  nextNonTerminal?: string | null;
+}
+
+export interface GrammarWordAnalysis {
+  word: string[];
+  accepted: boolean;
+  reason: string;
+  particularDerivation: GrammarDerivationStep[];
+  derivationTreeLines: string[];
+  threadDiagramLines: string[];
+}
+
+export interface GrammarTransformationRule {
+  title: string;
+  description: string;
+}
+
+export interface GrammarManualAnalysisResult {
+  validation: GrammarValidationResult;
+  analysis?: GrammarWordAnalysis;
+}
+
+export interface GrammarAutomatonAnalysisResult {
+  validation: GrammarValidationResult;
+  analysis?: GrammarWordAnalysis;
+  transformationRules: GrammarTransformationRule[];
+}
+
 export async function analyzeAutomatonRequest(automaton: AutomataData) {
   return postJson<AutomataAnalysisResult>("/api/automata/analyze", { automaton });
 }
 
 export async function simulateAutomatonRequest(automaton: AutomataData, word: string) {
   return postJson<AutomataSimulationResult>("/api/automata/simulate", { automaton, word });
+}
+
+export async function transformNfaToDfaRequest(automaton: AutomataData) {
+  return postJson<NfaToDfaTransformationResult>("/api/automata/transform", { automaton });
+}
+
+export async function minimizeDfaRequest(automaton: AutomataData) {
+  return postJson<DfaMinimizationResult>("/api/automata/minimize", { automaton });
+}
+
+export async function analyzeManualGrammarRequest(payload: {
+  terminals: string[];
+  nonTerminals: string[];
+  startSymbol: string;
+  productions: GrammarProductionInput[];
+  word: string;
+  strictRules?: boolean;
+}) {
+  return postJson<GrammarManualAnalysisResult>("/api/grammar/manual", payload);
+}
+
+export async function analyzeEquivalentGrammarRequest(
+  automaton: AutomataData,
+  word: string,
+  strictRules?: boolean,
+) {
+  return postJson<GrammarAutomatonAnalysisResult>("/api/grammar/equivalent", {
+    automaton,
+    word,
+    strictRules,
+  });
 }

@@ -173,6 +173,65 @@ export async function exportSvgElementAsPng(svgElement: SVGSVGElement, fileBaseN
   }
 }
 
+export async function copySvgElementAsPngToClipboard(svgElement: SVGSVGElement) {
+  if (!("clipboard" in navigator) || typeof ClipboardItem === "undefined") {
+    throw new Error("El navegador no soporta copiar imagenes al portapapeles.");
+  }
+
+  const clonedSvg = svgElement.cloneNode(true);
+  if (!(clonedSvg instanceof SVGSVGElement)) {
+    throw new Error("No fue posible clonar el diagrama.");
+  }
+
+  inlineComputedStyles(svgElement, clonedSvg);
+  clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const serializedSvg = new XMLSerializer().serializeToString(clonedSvg);
+  const svgBlob = new Blob([serializedSvg], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = new Image();
+    image.decoding = "async";
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("No fue posible renderizar el diagrama como imagen."));
+      image.src = svgUrl;
+    });
+
+    const rect = svgElement.getBoundingClientRect();
+    const width = Math.max(Math.round(rect.width), 1200);
+    const height = Math.max(Math.round(rect.height), 800);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("No fue posible inicializar el canvas de exportacion.");
+    }
+
+    context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--background")
+      ? `hsl(${getComputedStyle(document.documentElement).getPropertyValue("--background")})`
+      : "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!pngBlob) {
+      throw new Error("No fue posible construir la imagen PNG para el portapapeles.");
+    }
+
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        [pngBlob.type]: pngBlob,
+      }),
+    ]);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
 async function getClipboardImageBlob(element: HTMLElement) {
   const blob = await toBlob(element, {
     cacheBust: true,

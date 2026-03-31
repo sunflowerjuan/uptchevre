@@ -2,8 +2,11 @@ import express from "express";
 import cors from "cors";
 import { analyzeAutomaton } from "./automata-analysis.js";
 import { areAutomataEquivalent } from "./automata-equivalence.js";
+import { minimizeDfa } from "./automata-minimization.js";
 import { simulateAutomaton } from "./automata-simulation.js";
-import type { AutomataData } from "./types.js";
+import { transformNfaToDfa } from "./automata-transformation.js";
+import { analyzeAutomatonEquivalentGrammar, analyzeManualGrammar } from "./grammar-analysis.js";
+import type { AutomataData, GrammarProductionInput } from "./types.js";
 
 /**
  * Servidor HTTP del backend local.
@@ -12,17 +15,19 @@ import type { AutomataData } from "./types.js";
  * Exponer el motor lógico de teoría formal mediante una API simple durante
  * desarrollo local. En despliegue, esta misma lógica puede publicarse a través
  * de funciones serverless, pero este servidor sigue siendo la puerta de
- * entrada directa para pruebas y desarrollo.
+ * entrada directa para pruebas, depuración e integración local con el
+ * frontend.
  */
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
 
 /**
- * Middleware base.
+ * Middleware base del servidor.
  *
- * - `cors()` permite llamadas desde el frontend en desarrollo.
- * - `express.json()` habilita el parseo del body JSON y limita su tamaño para
- *   evitar cargas desproporcionadas.
+ * Responsabilidades:
+ * - habilitar CORS para permitir consumo desde el frontend en desarrollo;
+ * - parsear cuerpos JSON con un límite razonable para evitar payloads
+ *   desproporcionados.
  */
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -82,6 +87,29 @@ app.post("/api/automata/simulate", (req, res) => {
 });
 
 /**
+ * Convierte un AFND (`NFA` o `NFA_EPSILON`) a un AFD mediante construcción
+ * de subconjuntos.
+ *
+ * Flujo:
+ * - valida la presencia del autómata en el body;
+ * - delega al algoritmo de determinización;
+ * - devuelve el AFD resultante y la tabla explicativa de construcción.
+ */
+app.post("/api/automata/transform", (req, res) => {
+  const body = req.body as { automaton?: AutomataData };
+  if (!body?.automaton) {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata en el body.",
+    });
+    return;
+  }
+
+  const result = transformNfaToDfa(body.automaton);
+  res.json({ ok: true, result });
+});
+
+/**
  * Compara dos autómatas deterministas por equivalencia de lenguaje.
  *
  * Flujo:
@@ -104,10 +132,109 @@ app.post("/api/automata/equivalent", (req, res) => {
 });
 
 /**
- * Arranca el servidor HTTP.
+ * Minimiza un DFA completo.
  *
- * Efecto secundario:
- * - Abre un puerto local y deja el proceso escuchando solicitudes.
+ * Flujo:
+ * - valida la presencia del autómata;
+ * - delega al algoritmo de minimización;
+ * - captura errores de precondiciones como no determinismo o transiciones
+ *   faltantes y los devuelve al cliente.
+ */
+app.post("/api/automata/minimize", (req, res) => {
+  const body = req.body as { automaton?: AutomataData };
+  if (!body?.automaton) {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata en el body.",
+    });
+    return;
+  }
+
+  try {
+    const result = minimizeDfa(body.automaton);
+    res.json({ ok: true, result });
+  } catch (error) {
+    res.status(400).json({
+      ok: false,
+      error: error instanceof Error ? error.message : "No fue posible minimizar el DFA.",
+    });
+  }
+});
+
+/**
+ * Analiza una gramática regular ingresada manualmente.
+ *
+ * Flujo:
+ * - valida terminales, no terminales, símbolo inicial, producciones y palabra;
+ * - delega la validación y análisis al motor de gramáticas;
+ * - devuelve validación y, si aplica, la derivación de la palabra.
+ */
+app.post("/api/grammar/manual", (req, res) => {
+  const body = req.body as {
+    terminals?: string[];
+    nonTerminals?: string[];
+    startSymbol?: string;
+    productions?: GrammarProductionInput[];
+    word?: string;
+    strictRules?: boolean;
+  };
+
+  if (
+    !Array.isArray(body?.terminals) ||
+    !Array.isArray(body?.nonTerminals) ||
+    typeof body?.startSymbol !== "string" ||
+    !Array.isArray(body?.productions) ||
+    typeof body?.word !== "string"
+  ) {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar terminales, no terminales, simbolo inicial, producciones y palabra.",
+    });
+    return;
+  }
+
+  const result = analyzeManualGrammar({
+    terminals: body.terminals,
+    nonTerminals: body.nonTerminals,
+    startSymbol: body.startSymbol,
+    productions: body.productions,
+    word: body.word,
+    strictRules: body.strictRules,
+  });
+
+  res.json({ ok: true, result });
+});
+
+/**
+ * Deriva la gramática regular equivalente a un autómata y analiza una palabra.
+ *
+ * Flujo:
+ * - valida que lleguen autómata y palabra;
+ * - genera la gramática equivalente desde el autómata;
+ * - analiza la palabra sobre la gramática resultante.
+ */
+app.post("/api/grammar/equivalent", (req, res) => {
+  const body = req.body as { automaton?: AutomataData; word?: string; strictRules?: boolean };
+
+  if (!body?.automaton || typeof body.word !== "string") {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata y la palabra a evaluar.",
+    });
+    return;
+  }
+
+  const result = analyzeAutomatonEquivalentGrammar({
+    automaton: body.automaton,
+    word: body.word,
+    strictRules: body.strictRules,
+  });
+
+  res.json({ ok: true, result });
+});
+
+/**
+ * Arranca el servidor HTTP local.
  */
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console

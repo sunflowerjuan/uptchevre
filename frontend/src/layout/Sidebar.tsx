@@ -1,14 +1,15 @@
-import { ChevronLeft, ChevronRight, FileCode2, PlayCircle, Table2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileCode2, GitBranch, PlayCircle, Shuffle, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
 
-export type SidebarModule = "simulator" | "formalism" | "both";
+export type SidebarModule = "simulator" | "formalism" | "both" | "conversion" | "minimization";
 
 interface SidebarProps {
   collapsed: boolean;
   activeModule: SidebarModule;
   onToggle: () => void;
   onSelectModule: (module: SidebarModule) => void;
+  secondaryTools?: ReactNode;
   footer?: ReactNode;
 }
 
@@ -16,6 +17,8 @@ const modules: { id: SidebarModule; label: string; icon: React.ElementType }[] =
   { id: "both", label: "Panel completo", icon: FileCode2 },
   { id: "simulator", label: "Simulador", icon: PlayCircle },
   { id: "formalism", label: "Formalismo", icon: Table2 },
+  { id: "conversion", label: "Transformación", icon: Shuffle },
+  { id: "minimization", label: "Minimización", icon: GitBranch },
 ];
 
 export function Sidebar({
@@ -23,6 +26,7 @@ export function Sidebar({
   activeModule,
   onToggle,
   onSelectModule,
+  secondaryTools,
   footer,
 }: SidebarProps) {
   return (
@@ -66,9 +70,19 @@ export function Sidebar({
           })}
         </nav>
 
+        {secondaryTools && (
+          <div className="border-t p-2">
+            {!collapsed && (
+              <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Herramientas extra
+              </p>
+            )}
+            {secondaryTools}
+          </div>
+        )}
+
         {!collapsed && footer}
       </div>
     </aside>
   );
 }
-
