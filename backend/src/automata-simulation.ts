@@ -18,23 +18,55 @@ import type {
 /**
  * Simulación formal de palabras.
  *
- * Este módulo aplica la definición de FTE a una palabra dada un autómata, 
- * y devuelve la traza completa de estados alcanzados en cada paso, incluyendo los estados.:
- * Después avanza símbolo a símbolo combinando move y clausura-ε.
+ * Este módulo implementa dos vistas complementarias de la ejecución:
+ *
+ * 1. Una vista formal basada en la función de transición extendida `δ*`,
+ *    adecuada para explicar la evolución del conjunto de estados alcanzados.
+ * 2. Una vista concreta basada en recorridos particulares del grafo, útil para
+ *    mostrar ejemplos de caminos aceptantes y rechazantes al usuario.
+ */
+
+/**
+ * Construye el conjunto de estados de aceptación del autómata.
+ *
+ * Propósito:
+ * Facilitar consultas repetidas del tipo "¿este estado pertenece a F?" con
+ * costo O(1) durante la simulación.
+ *
+ * Parámetros:
+ * - `automaton: AutomataData`: autómata fuente.
+ *
+ * Retorno:
+ * - `Set<string>`: ids de estados de aceptación.
+ *
  */
 function getAcceptedSet(automaton: AutomataData): Set<string> {
   return new Set(automaton.states.filter((state) => state.isAccept).map((state) => state.id));
 }
 
+/**
+ * Construye la traza completa de la función de transición extendida `δ*`.
+ *
+ * Propósito:
+ * Registrar, paso a paso, cómo evoluciona el conjunto de estados alcanzados al
+ * consumir una palabra completa.
+ *
+ * Parámetros:
+ * - `automaton: AutomataData`: autómata sobre el cual se evalúa la palabra.
+ * - `word: string`: palabra de entrada.
+ *
+ * Retorno:
+ * - `DeltaStarStep[]`: secuencia ordenada de pasos de la simulación formal.
+ *
+ * Cómo funciona internamente:
+ * - El paso 0 representa la situación antes de consumir símbolos.
+ * - En cada iteración se calcula primero `move`.
+ * - Luego se aplica `epsilonClosure` sobre el resultado de `move`.
+ * - Se guarda tanto el conjunto "reachable" inmediato como el conjunto final
+ *   tras expandir por ε.
+ *
+ */
 function buildDeltaStar(automaton: AutomataData, word: string): DeltaStarStep[] {
-  /**
-   * Construye explícitamente la evolución de FTE sobre toda la palabra.
-   *
-   * El paso 0 es el caso base.
-   * Cada paso posterior registra:
-   * - reachable: resultado de consumir el símbolo actual
-   * - closure:   expansión posterior por ε cuando aplica
-   */
   const { nameMap } = buildTransitionMap(automaton);
   const initialIds = getInitialStates(automaton).map((state) => state.id);
   let currentClosure = epsilonClosure(automaton, initialIds);
@@ -55,8 +87,14 @@ function buildDeltaStar(automaton: AutomataData, word: string): DeltaStarStep[] 
   let prefix = "";
   for (const symbol of word.split("")) {
     prefix += symbol;
+
+    // Primero se consumen transiciones visibles con el símbolo actual.
     const reachable = move(automaton, currentClosure, symbol);
+
+    // Después se expande el resultado por ε para obtener la configuración
+    // efectiva del siguiente paso.
     currentClosure = epsilonClosure(automaton, reachable);
+
     const reachableIds = Array.from(reachable).sort();
     const closureIds = Array.from(currentClosure).sort();
 
@@ -75,23 +113,47 @@ function buildDeltaStar(automaton: AutomataData, word: string): DeltaStarStep[] 
   return steps;
 }
 
+/**
+ * Enumera caminos concretos de aceptación y rechazo.
+ *
+ * Propósito:
+ * Complementar la vista conjuntista de `δ*` con ejemplos explícitos de rutas
+ * particulares sobre el autómata.
+ *
+ * Parámetros:
+ * - `automaton: AutomataData`: autómata fuente.
+ * - `word: string`: palabra a consumir.
+ * - `maxPaths = 12`: número máximo de rutas aceptantes y rechazantes que se
+ *   desean conservar.
+ *
+ * Retorno:
+ * - Objeto con `acceptedPaths` y `rejectedPaths`.
+ *
+ * Decisiones técnicas:
+ * - Se usa DFS para explorar ramas concretas.
+ * - La aceptación real del autómata sigue decidiéndose por conjuntos; estas
+ *   rutas son material explicativo.
+ * - Se limita la cantidad de resultados para evitar crecimiento explosivo.
+ *
+ */
 function enumeratePaths(
   automaton: AutomataData,
   word: string,
   maxPaths = 12,
 ): { acceptedPaths: SimulationPath[]; rejectedPaths: SimulationPath[] } {
-  /**
-   * Recorre caminos concretos para fines explicativos.
-   *
-   * decide aceptación a nivel de conjunto.
-   * Estas trazas muestran ejemplos de ramas particulares útiles para docencia.
-   */
   const { outgoing, nameMap } = buildTransitionMap(automaton);
   const acceptSet = getAcceptedSet(automaton);
   const acceptedPaths: SimulationPath[] = [];
   const rejectedPaths: SimulationPath[] = [];
   const initialStates = getInitialStates(automaton);
 
+  /**
+   * Registra una ruta ya cerrada en la colección correspondiente.
+   *
+   * Se guarda la porción consumida de la palabra y la secuencia completa de
+   * estados/steps para que la interfaz pueda explicar por qué la ruta aceptó o
+   * rechazó.
+   */
   const recordPath = (
     accepted: boolean,
     stateIds: string[],
@@ -114,6 +176,13 @@ function enumeratePaths(
     }
   };
 
+  /**
+   * DFS sobre configuraciones `(estado, índiceDeLectura)`.
+   *
+   * La clave `visitKey` permite detectar ciclos epsilon sobre el mismo punto de
+   * lectura. Si no se cortara ese caso, un AFN-ε con ciclos podría generar una
+   * recursión infinita sin consumir símbolos.
+   */
   const dfs = (
     stateId: string,
     inputIndex: number,
@@ -121,7 +190,6 @@ function enumeratePaths(
     stepPath: SimulationPathStep[],
     visiting: Set<string>,
   ) => {
-    // Evita ciclos infinitos por ε sobre el mismo índice de lectura.
     if (acceptedPaths.length >= maxPaths && rejectedPaths.length >= maxPaths) {
       return;
     }
@@ -135,6 +203,8 @@ function enumeratePaths(
     const nextVisiting = new Set(visiting);
     nextVisiting.add(visitKey);
 
+    // Primero se exploran las transiciones ε porque no consumen entrada y
+    // pueden habilitar nuevas configuraciones antes de leer el siguiente símbolo.
     const epsilonTransitions = outgoing.get(`${stateId}::`) ?? [];
     for (const transition of epsilonTransitions) {
       dfs(
@@ -157,9 +227,11 @@ function enumeratePaths(
       );
     }
 
+    // Si aún quedan símbolos por consumir, se intentan transiciones visibles.
     if (inputIndex < word.length) {
       const symbol = normalizeSymbol(word[inputIndex] ?? "");
       const transitions = outgoing.get(`${stateId}::${symbol}`) ?? [];
+
       if (transitions.length > 0) {
         for (const transition of transitions) {
           dfs(
@@ -178,6 +250,8 @@ function enumeratePaths(
                 consumedIndex: inputIndex + 1,
               },
             ],
+            // Al consumir un símbolo, la configuración cambia de índice de
+            // lectura, así que el control de ciclos puede reiniciarse.
             new Set(),
           );
         }
@@ -185,6 +259,8 @@ function enumeratePaths(
       }
     }
 
+    // Si no hay más movimientos posibles, la ruta se cierra aquí. Solo acepta
+    // si ya consumió toda la palabra y el estado actual pertenece a F.
     const accepted = inputIndex === word.length && acceptSet.has(stateId);
     recordPath(accepted, statePath, stepPath, inputIndex);
   };
@@ -199,13 +275,28 @@ function enumeratePaths(
   };
 }
 
+/**
+ * Simula una palabra completa sobre el autómata.
+ *
+ * Propósito:
+ * Unificar en un único resultado la clasificación del autómata, la traza
+ * formal `δ*`, el veredicto de aceptación y ejemplos de recorridos concretos.
+ *
+ * Parámetros:
+ * - `automaton: AutomataData`: autómata fuente.
+ * - `word: string`: palabra a evaluar.
+ *
+ * Retorno:
+ * - `AutomataSimulationResult`: resultado completo de la simulación.
+ *
+ * Flujo:
+ * - Analiza estructuralmente el autómata.
+ * - Construye los pasos de `δ*`.
+ * - Evalúa aceptación sobre la clausura final.
+ * - Enumera caminos concretos de apoyo.
+ *
+ */
 export function simulateAutomaton(automaton: AutomataData, word: string): AutomataSimulationResult {
-  /**
-   * Evalúa la palabra completa y devuelve:
-   * - los pasos de FTE sobre la palabra
-   * - el veredicto de aceptación
-   * - trazas concretas de apoyo
-   */
   const analysis = analyzeAutomaton(automaton);
   const deltaStar = buildDeltaStar(automaton, word);
   const lastStep = deltaStar[deltaStar.length - 1];

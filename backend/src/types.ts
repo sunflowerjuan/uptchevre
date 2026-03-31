@@ -1,14 +1,25 @@
 /**
- * Contrato formal compartido por las operaciones teóricas del backend.
+ * Contratos formales compartidos por las operaciones teóricas del backend.
  *
- * Todas las funciones del backend parten del mismo modelo:
- * A = (Q, SIGMA, DELTA, q0, F)
+ * Idea central:
+ * Todo el sistema modela autómatas usando la 5-tupla clásica:
  *
- * Estas interfaces sirven para representar:
- * - el automata base dibujado por el usuario
- * - la proyección formal que consume la interfaz
- * - los pasos de simulación de la función de transición extendida
- * - las trazas concretas de aceptación y rechazo
+ * A = (Q, Σ, δ, q0, F)
+ *
+ * Estas interfaces representan:
+ * - el autómata base dibujado por el usuario;
+ * - la proyección formal consumida por la interfaz;
+ * - los resultados de simulación, transformación y minimización;
+ * - los contratos de gramáticas regulares derivadas o manuales.
+ */
+
+/**
+ * Estado del autómata tal como se almacena en el editor y se consume en el
+ * backend.
+ *
+ * Notas:
+ * - `x` y `y` son metadatos visuales del canvas.
+ * - `isInitial` e `isAccept` proyectan la pertenencia a `{q0}` y `F`.
  */
 export interface AutomataState {
   id: string;
@@ -19,31 +30,46 @@ export interface AutomataState {
   isAccept: boolean;
 }
 
+/**
+ * Transición elemental del autómata.
+ *
+ * Convención del proyecto:
+ * - `symbol = ""` representa una transición por ε.
+ * - cualquier otro string representa un símbolo visible del alfabeto Σ.
+ */
 export interface AutomataTransition {
   id: string;
   from: string;
   to: string;
-  /**
-   * Símbolo consumido por la transición.
-   *
-   * Convención del proyecto:
-   * - ""  equivale a \u03b5
-   * - cualquier otro string representa un s\u00edmbolo ordinario de \u03a3
-   */
   symbol: string;
 }
 
+/**
+ * Modelo global del autómata que viaja entre frontend y backend.
+ *
+ * Componentes:
+ * - `states`: conjunto finito Q.
+ * - `transitions`: relación operativa a partir de la cual se reconstruye δ.
+ * - `alphabet`: declaración explícita opcional de Σ; si no está completa, el
+ *   backend puede inferirla desde las transiciones.
+ */
 export interface AutomataData {
-  // conjunto finito de estados. 
   states: AutomataState[];
-  // Relación operativa usada para construir funcion de transicion.
   transitions: AutomataTransition[];
-  // alfabeto de entrada explícito o inferido desde las transiciones. */
   alphabet: string[];
 }
 
+/**
+ * Clasificación estructural del autómata detectada por el backend.
+ */
 export type AutomatonType = "DFA" | "NFA" | "NFA_EPSILON";
 
+/**
+ * Descriptor de estado listo para consumo en la interfaz.
+ *
+ * A diferencia de `AutomataState`, esta estructura elimina coordenadas y deja
+ * solo la información formal relevante para los paneles teóricos.
+ */
 export interface StateDescriptor {
   id: string;
   name: string;
@@ -51,6 +77,9 @@ export interface StateDescriptor {
   isAccept: boolean;
 }
 
+/**
+ * Descriptor serializado de transición para vistas formales.
+ */
 export interface TransitionDescriptor {
   fromId: string;
   fromName: string;
@@ -60,6 +89,9 @@ export interface TransitionDescriptor {
   displaySymbol: string;
 }
 
+/**
+ * Incidencia que explica por qué un autómata no puede tratarse como DFA.
+ */
 export interface DeterminismIssueDescriptor {
   stateId: string;
   stateName: string;
@@ -68,6 +100,9 @@ export interface DeterminismIssueDescriptor {
   targets: string[];
 }
 
+/**
+ * Resultado serializado de una clausura-ε por estado.
+ */
 export interface EClosureDescriptor {
   stateId: string;
   stateName: string;
@@ -75,8 +110,10 @@ export interface EClosureDescriptor {
   closureNames: string[];
 }
 
+/**
+ * Resultado consolidado del análisis estructural del autómata.
+ */
 export interface AutomataAnalysisResult {
-  // Clasificación estructural: DFA, NFA o NFA-ε. 
   automatonType: AutomatonType;
   alphabet: string[];
   states: StateDescriptor[];
@@ -89,12 +126,11 @@ export interface AutomataAnalysisResult {
 }
 
 /**
- * Paso observable de la función de transición extendida .
- * - reachable = resultado inmediato de aplicar move con el símbolo actual
- * - closure   = resultado final tras aplicar clausura-ε
- * En DFA, reachable y closure contienen un único estado.
- * En NFA, closure coincide con reachable.
- * En NFA-e, closure puede expandirse más allá de reachable.
+ * Paso observable de la función de transición extendida `δ*`.
+ *
+ * Significado de campos:
+ * - `reachable`: resultado inmediato de consumir el símbolo actual.
+ * - `closure`: resultado final tras expandir por ε cuando el modelo lo permite.
  */
 export interface DeltaStarStep {
   index: number;
@@ -107,7 +143,9 @@ export interface DeltaStarStep {
   closureStateNames: string[];
 }
 
-// Paso elemental de una traza concreta sobre una palabra. 
+/**
+ * Paso individual de un camino concreto sobre una palabra.
+ */
 export interface SimulationPathStep {
   fromId: string;
   fromName: string;
@@ -118,7 +156,9 @@ export interface SimulationPathStep {
   consumedIndex: number;
 }
 
-// Camino concreto seguido por la simulación para explicar aceptación o rechazo.
+/**
+ * Recorrido concreto usado para explicar aceptación o rechazo.
+ */
 export interface SimulationPath {
   stateIds: string[];
   stateNames: string[];
@@ -128,7 +168,9 @@ export interface SimulationPath {
   haltedAtIndex: number;
 }
 
-// Resultado final de aplicar FTE a una palabra.
+/**
+ * Resultado completo de la simulación de una palabra.
+ */
 export interface AutomataSimulationResult {
   automatonType: AutomatonType;
   accepted: boolean;
@@ -140,7 +182,9 @@ export interface AutomataSimulationResult {
 
 /**
  * Una fila de la tabla de construcción de subconjuntos.
- * Cada fila corresponde a un estado del DFA resultante (subconjunto de estados del AFND).
+ *
+ * Cada fila representa un estado del AFD resultante y conserva el rastro de
+ * qué subconjunto de estados del AFND le dio origen.
  */
 export interface TransformationTableRow {
   dfaStateId: string;
@@ -149,8 +193,8 @@ export interface TransformationTableRow {
   nfaStateNames: string[];
   transitions: {
     symbol: string;
-    moveNfaStateNames: string[];   // resultado de MOVE(estado, símbolo) antes de ε-clausura
-    eClosureNfaStateNames: string[]; // resultado tras aplicar ε-clausura al MOVE
+    moveNfaStateNames: string[];
+    eClosureNfaStateNames: string[];
     targetDfaStateId: string;
     targetDfaStateName: string;
   }[];
@@ -159,8 +203,7 @@ export interface TransformationTableRow {
 }
 
 /**
- * Resultado de convertir un AFND (NFA o NFA-ε) a un AFD
- * mediante la construcción de subconjuntos.
+ * Resultado de la transformación AFND → AFD por subconjuntos.
  */
 export interface NfaToDfaTransformationResult {
   originalType: AutomatonType;
@@ -174,6 +217,9 @@ export interface NfaToDfaTransformationResult {
   }[];
 }
 
+/**
+ * Formalismo original del DFA antes de su minimización.
+ */
 export interface DfaMinimizationOriginalFormalism {
   states: string[];
   alphabet: string[];
@@ -181,12 +227,18 @@ export interface DfaMinimizationOriginalFormalism {
   acceptStates: string[];
 }
 
+/**
+ * Grupo de partición usado durante el refinamiento de estados.
+ */
 export interface DfaPartitionGroup {
   id: string;
   stateIds: string[];
   stateNames: string[];
 }
 
+/**
+ * Evidencia de por qué dos estados de un grupo terminan separándose.
+ */
 export interface DfaPartitionSplitCause {
   groupId: string;
   stateAId: string;
@@ -202,6 +254,9 @@ export interface DfaPartitionSplitCause {
   targetBGroupId: string;
 }
 
+/**
+ * Iteración del refinamiento por particiones.
+ */
 export interface DfaPartitionIteration {
   iteration: number;
   beforeGroups: DfaPartitionGroup[];
@@ -210,8 +265,14 @@ export interface DfaPartitionIteration {
   stabilized: boolean;
 }
 
+/**
+ * Estado posible de una celda en la tabla de distinguibilidad.
+ */
 export type DfaDistinguishabilityCellStatus = "pending" | "distinguishable" | "equivalent";
 
+/**
+ * Celda individual de la tabla de distinguibilidad.
+ */
 export interface DfaDistinguishabilityCell {
   rowStateId: string;
   rowStateName: string;
@@ -222,11 +283,17 @@ export interface DfaDistinguishabilityCell {
   markedInIteration?: number;
 }
 
+/**
+ * Snapshot completo de la tabla de distinguibilidad en una iteración.
+ */
 export interface DfaDistinguishabilityIteration {
   iteration: number;
   cells: DfaDistinguishabilityCell[];
 }
 
+/**
+ * Verificación por símbolo dentro de una clase de equivalencia.
+ */
 export interface DfaEquivalenceSymbolCheck {
   symbol: string;
   mappings: {
@@ -238,6 +305,9 @@ export interface DfaEquivalenceSymbolCheck {
   }[];
 }
 
+/**
+ * Clase de equivalencia final del DFA minimizado.
+ */
 export interface DfaEquivalenceClass {
   className: string;
   stateIds: string[];
@@ -246,6 +316,9 @@ export interface DfaEquivalenceClass {
   symbolChecks: DfaEquivalenceSymbolCheck[];
 }
 
+/**
+ * Fila de la matriz de transición del DFA minimizado.
+ */
 export interface DfaMinimizedTransitionRow {
   className: string;
   memberStateIds: string[];
@@ -260,6 +333,9 @@ export interface DfaMinimizedTransitionRow {
   }[];
 }
 
+/**
+ * Formalismo final del DFA minimizado.
+ */
 export interface DfaMinimizedFormalism {
   states: string[];
   alphabet: string[];
@@ -267,6 +343,9 @@ export interface DfaMinimizedFormalism {
   acceptStates: string[];
 }
 
+/**
+ * Resultado global del proceso de minimización de un DFA.
+ */
 export interface DfaMinimizationResult {
   originalFormalism: DfaMinimizationOriginalFormalism;
   partitionIterations: DfaPartitionIteration[];
@@ -277,14 +356,27 @@ export interface DfaMinimizationResult {
   minimizedDfa: AutomataData;
 }
 
+/**
+ * Fuente de origen de una gramática.
+ */
 export type GrammarSource = "manual" | "automaton";
+
+/**
+ * Linealidad detectada o declarada de la gramática regular.
+ */
 export type GrammarLinearity = "RIGHT" | "LEFT";
 
+/**
+ * Producción ingresada desde la interfaz antes de su normalización.
+ */
 export interface GrammarProductionInput {
   left: string;
   rule: string;
 }
 
+/**
+ * Producción regular ya normalizada por el backend.
+ */
 export interface GrammarProduction {
   id: string;
   left: string;
@@ -293,6 +385,9 @@ export interface GrammarProduction {
   note?: string;
 }
 
+/**
+ * Relación entre estados del autómata y no terminales derivados.
+ */
 export interface GrammarStateMapping {
   stateId: string;
   stateName: string;
@@ -301,6 +396,9 @@ export interface GrammarStateMapping {
   isAccept: boolean;
 }
 
+/**
+ * Definición completa de una gramática regular.
+ */
 export interface GrammarDefinition {
   terminals: string[];
   nonTerminals: string[];
@@ -312,15 +410,24 @@ export interface GrammarDefinition {
   derivedFromAutomatonType?: AutomatonType;
 }
 
+/**
+ * Incidencia de validación gramatical.
+ */
 export interface GrammarValidationIssue {
   message: string;
 }
 
+/**
+ * Resultado de validar una gramática regular.
+ */
 export interface GrammarValidationResult {
   grammar?: GrammarDefinition;
   issues: GrammarValidationIssue[];
 }
 
+/**
+ * Paso de una derivación particular sobre la gramática.
+ */
 export interface GrammarDerivationStep {
   id: string;
   sententialForm: string[];
@@ -331,6 +438,9 @@ export interface GrammarDerivationStep {
   nextNonTerminal?: string | null;
 }
 
+/**
+ * Resultado del análisis de una palabra sobre una gramática.
+ */
 export interface GrammarWordAnalysis {
   word: string[];
   accepted: boolean;
@@ -340,19 +450,27 @@ export interface GrammarWordAnalysis {
   threadDiagramLines: string[];
 }
 
+/**
+ * Regla textual que explica la transformación de autómata a gramática.
+ */
 export interface GrammarTransformationRule {
   title: string;
   description: string;
 }
 
+/**
+ * Resultado del análisis de una gramática ingresada manualmente.
+ */
 export interface GrammarManualAnalysisResult {
   validation: GrammarValidationResult;
   analysis?: GrammarWordAnalysis;
 }
 
+/**
+ * Resultado del análisis de la gramática equivalente derivada desde un autómata.
+ */
 export interface GrammarAutomatonAnalysisResult {
   validation: GrammarValidationResult;
   analysis?: GrammarWordAnalysis;
   transformationRules: GrammarTransformationRule[];
 }
-

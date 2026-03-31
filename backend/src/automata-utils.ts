@@ -4,8 +4,9 @@ import { getInputAlphabet, normalizeSymbol } from "./automata-analysis.js";
 /**
  * Utilidades específicas del caso determinista.
  *
- * Se usan sobre todo en equivalencia de DFA, donde conviene disponer
- * de una estructura compacta del tipo (estado, símbolo) -> estado.
+ * Este módulo concentra helpers usados cuando el algoritmo supone o necesita
+ * tratar el autómata como DFA. Su función principal es preparar estructuras
+ * compactas y validar la univocidad de la función de transición.
  */
 export interface DeterminismIssue {
   stateId: string;
@@ -18,24 +19,79 @@ export interface DeterminismCheckResult {
   issues: DeterminismIssue[];
 }
 
+/**
+ * Obtiene el alfabeto operativo del autómata.
+ *
+ * Propósito:
+ * Reexponer el cálculo de Σ desde un módulo semánticamente asociado al caso
+ * determinista.
+ *
+ * Parámetros:
+ * - `a: AutomataData`: autómata fuente.
+ *
+ * Retorno:
+ * - `string[]`: alfabeto sin transiciones epsilon.
+ *
+ */
 export function getAlphabet(a: AutomataData): string[] {
   return getInputAlphabet(a);
 }
 
+/**
+ * Obtiene el primer estado inicial del autómata.
+ *
+ * Propósito:
+ * Simplificar algoritmos que necesitan arrancar desde un único estado
+ * inicial, como ocurre en la mayoría de procesos específicos de DFA.
+ *
+ * Parámetros:
+ * - `a: AutomataData`: autómata fuente.
+ *
+ * Retorno:
+ * - `AutomataState | undefined`: estado inicial si existe.
+ *
+ * Limitación:
+ * - Si el modelo tiene más de un estado inicial, esta función solo devuelve
+ *   el primero; por eso debe combinarse con una validación de determinismo si
+ *   la unicidad del inicial es una precondición del algoritmo.
+ */
 export function getInitialState(a: AutomataData): AutomataState | undefined {
   return a.states.find((s) => s.isInitial);
 }
 
+/**
+ * Verifica si la función de transición del autómata es unívoca.
+ *
+ * Propósito:
+ * Detectar si existe más de un destino para la misma pareja
+ * `(estado, símbolo)`, lo que invalidaría la interpretación del modelo como
+ * un DFA.
+ *
+ * Parámetros:
+ * - `a: AutomataData`: autómata a validar.
+ *
+ * Retorno:
+ * - `DeterminismCheckResult`: indicador booleano y lista de incidencias.
+ *
+ * Cómo funciona internamente:
+ * - Agrupa las transiciones por clave `from::symbol`.
+ * - Si una clave tiene más de una transición, se registra como conflicto.
+ *
+ */
 export function checkDeterminism(a: AutomataData): DeterminismCheckResult {
-  // Si dos transiciones comparten (estado, símbolo),  deja de ser función
-  // unívoca y el modelo ya no puede tratarse como DFA.
+  // Si dos transiciones comparten la misma pareja `(estado, símbolo)`, la
+  // transición deja de ser función y pasa a ser relación no determinista.
   const issues: DeterminismIssue[] = [];
   const byStateAndSymbol = new Map<string, AutomataTransition[]>();
 
   for (const t of a.transitions) {
-    const key = `${t.from}::${normalizeSymbol(t.symbol)}`;
+    const normalizedSymbol = normalizeSymbol(t.symbol);
+    const key = `${t.from}::${normalizedSymbol}`;
     const list = byStateAndSymbol.get(key) ?? [];
-    list.push({ ...t, symbol: normalizeSymbol(t.symbol) });
+
+    // Se almacena la versión normalizada para que el reporte y los cálculos
+    // posteriores trabajen sobre una forma canónica del símbolo.
+    list.push({ ...t, symbol: normalizedSymbol });
     byStateAndSymbol.set(key, list);
   }
 
@@ -59,8 +115,29 @@ export interface DfaStructure {
   acceptIds: Set<string>;
 }
 
+/**
+ * Serializa el DFA en una estructura compacta para algoritmos posteriores.
+ *
+ * Propósito:
+ * Reducir el costo de consultas repetidas sobre la función de transición,
+ * especialmente en algoritmos como equivalencia por producto de estados.
+ *
+ * Parámetros:
+ * - `a: AutomataData`: autómata fuente.
+ *
+ * Retorno:
+ * - `DfaStructure`: estructura con Σ, δ indexada, estado inicial y conjunto F.
+ *
+ * Cómo funciona internamente:
+ * - El alfabeto se obtiene con `getAlphabet`.
+ * - La función δ se materializa como un mapa directo
+ *   `delta["estado::símbolo"] = estadoDestino`.
+ * - Los estados de aceptación se guardan en un `Set` para consultas O(1).
+ *
+ */
 export function buildDfaStructure(a: AutomataData): DfaStructure {
-  // Serializa FT como mapa directo para el recorrido BFS del producto de estados.
+  // Esta serialización evita tener que recorrer la lista completa de
+  // transiciones cada vez que se consulta un destino.
   const alphabet = getAlphabet(a);
   const delta = new Map<string, string>();
 
@@ -78,4 +155,3 @@ export function buildDfaStructure(a: AutomataData): DfaStructure {
     acceptIds,
   };
 }
-

@@ -8,20 +8,48 @@ import { transformNfaToDfa } from "./automata-transformation.js";
 import { analyzeAutomatonEquivalentGrammar, analyzeManualGrammar } from "./grammar-analysis.js";
 import type { AutomataData, GrammarProductionInput } from "./types.js";
 
+/**
+ * Servidor HTTP del backend local.
+ *
+ * Propósito:
+ * Exponer el motor lógico de teoría formal mediante una API simple durante
+ * desarrollo local. En despliegue, esta misma lógica puede publicarse a través
+ * de funciones serverless, pero este servidor sigue siendo la puerta de
+ * entrada directa para pruebas, depuración e integración local con el
+ * frontend.
+ */
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
 
+/**
+ * Middleware base del servidor.
+ *
+ * Responsabilidades:
+ * - habilitar CORS para permitir consumo desde el frontend en desarrollo;
+ * - parsear cuerpos JSON con un límite razonable para evitar payloads
+ *   desproporcionados.
+ */
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-
-
-
-
+/**
+ * Endpoint de salud.
+ *
+ * Propósito:
+ * Confirmar que el proceso del backend está levantado y respondiendo.
+ */
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "uptchevre-backend" });
 });
-//describe la estructura del autómata, su tipo (DFA, NFA o NFA-e) y su alfabeto.
+
+/**
+ * Analiza la estructura formal de un autómata.
+ *
+ * Flujo:
+ * - valida que el body incluya `automaton`;
+ * - delega el análisis al motor formal;
+ * - devuelve un resultado serializable consumible por la interfaz.
+ */
 app.post("/api/automata/analyze", (req, res) => {
   const body = req.body as { automaton?: AutomataData };
   if (!body?.automaton) {
@@ -36,8 +64,14 @@ app.post("/api/automata/analyze", (req, res) => {
   res.json({ ok: true, result });
 });
 
-/** aplica FTE a una palabra dada un autómata, y devuelve la traza completa 
- de estados alcanzados en cada paso, incluyendo los estados */
+/**
+ * Simula una palabra sobre un autómata.
+ *
+ * Flujo:
+ * - valida autómata y palabra;
+ * - ejecuta la simulación con función de transición extendida;
+ * - devuelve trazas y veredicto de aceptación.
+ */
 app.post("/api/automata/simulate", (req, res) => {
   const body = req.body as { automaton?: AutomataData; word?: string };
   if (!body?.automaton || typeof body.word !== "string") {
@@ -52,8 +86,15 @@ app.post("/api/automata/simulate", (req, res) => {
   res.json({ ok: true, result });
 });
 
-
-// convierte un AFND (NFA o NFA-ε) a un AFD por construcción de subconjuntos
+/**
+ * Convierte un AFND (`NFA` o `NFA_EPSILON`) a un AFD mediante construcción
+ * de subconjuntos.
+ *
+ * Flujo:
+ * - valida la presencia del autómata en el body;
+ * - delega al algoritmo de determinización;
+ * - devuelve el AFD resultante y la tabla explicativa de construcción.
+ */
 app.post("/api/automata/transform", (req, res) => {
   const body = req.body as { automaton?: AutomataData };
   if (!body?.automaton) {
@@ -68,7 +109,14 @@ app.post("/api/automata/transform", (req, res) => {
   res.json({ ok: true, result });
 });
 
-//compara dos DFA mediante producto de estados
+/**
+ * Compara dos autómatas deterministas por equivalencia de lenguaje.
+ *
+ * Flujo:
+ * - valida que ambos autómatas vengan en el body;
+ * - delega al algoritmo de producto de estados;
+ * - devuelve equivalencia o palabra contraejemplo.
+ */
 app.post("/api/automata/equivalent", (req, res) => {
   const body = req.body as { automatonA?: AutomataData; automatonB?: AutomataData };
   if (!body?.automatonA || !body?.automatonB) {
@@ -83,6 +131,15 @@ app.post("/api/automata/equivalent", (req, res) => {
   res.json({ ok: true, result });
 });
 
+/**
+ * Minimiza un DFA completo.
+ *
+ * Flujo:
+ * - valida la presencia del autómata;
+ * - delega al algoritmo de minimización;
+ * - captura errores de precondiciones como no determinismo o transiciones
+ *   faltantes y los devuelve al cliente.
+ */
 app.post("/api/automata/minimize", (req, res) => {
   const body = req.body as { automaton?: AutomataData };
   if (!body?.automaton) {
@@ -104,6 +161,14 @@ app.post("/api/automata/minimize", (req, res) => {
   }
 });
 
+/**
+ * Analiza una gramática regular ingresada manualmente.
+ *
+ * Flujo:
+ * - valida terminales, no terminales, símbolo inicial, producciones y palabra;
+ * - delega la validación y análisis al motor de gramáticas;
+ * - devuelve validación y, si aplica, la derivación de la palabra.
+ */
 app.post("/api/grammar/manual", (req, res) => {
   const body = req.body as {
     terminals?: string[];
@@ -140,6 +205,14 @@ app.post("/api/grammar/manual", (req, res) => {
   res.json({ ok: true, result });
 });
 
+/**
+ * Deriva la gramática regular equivalente a un autómata y analiza una palabra.
+ *
+ * Flujo:
+ * - valida que lleguen autómata y palabra;
+ * - genera la gramática equivalente desde el autómata;
+ * - analiza la palabra sobre la gramática resultante.
+ */
 app.post("/api/grammar/equivalent", (req, res) => {
   const body = req.body as { automaton?: AutomataData; word?: string; strictRules?: boolean };
 
@@ -160,8 +233,10 @@ app.post("/api/grammar/equivalent", (req, res) => {
   res.json({ ok: true, result });
 });
 
+/**
+ * Arranca el servidor HTTP local.
+ */
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`Backend escuchando en http://localhost:${PORT}`);
 });
-
