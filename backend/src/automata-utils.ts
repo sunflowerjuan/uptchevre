@@ -32,8 +32,6 @@ export interface DeterminismCheckResult {
  * Retorno:
  * - `string[]`: alfabeto sin transiciones epsilon.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function getAlphabet(a: AutomataData): string[] {
   return getInputAlphabet(a);
@@ -79,8 +77,6 @@ export function getInitialState(a: AutomataData): AutomataState | undefined {
  * - Agrupa las transiciones por clave `from::symbol`.
  * - Si una clave tiene más de una transición, se registra como conflicto.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function checkDeterminism(a: AutomataData): DeterminismCheckResult {
   // Si dos transiciones comparten la misma pareja `(estado, símbolo)`, la
@@ -138,8 +134,6 @@ export interface DfaStructure {
  *   `delta["estado::símbolo"] = estadoDestino`.
  * - Los estados de aceptación se guardan en un `Set` para consultas O(1).
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function buildDfaStructure(a: AutomataData): DfaStructure {
   // Esta serialización evita tener que recorrer la lista completa de

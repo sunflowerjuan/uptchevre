@@ -33,8 +33,6 @@ export interface EquivalenceResult {
  *   Esto evita tener que completar artificialmente los autómatas antes de
  *   compararlos.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function areAutomataEquivalent(a1: AutomataData, a2: AutomataData): EquivalenceResult {
   const det1 = checkDeterminism(a1);

@@ -39,8 +39,6 @@ import type {
  * Retorno:
  * - `Set<string>`: ids de estados de aceptación.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 function getAcceptedSet(automaton: AutomataData): Set<string> {
   return new Set(automaton.states.filter((state) => state.isAccept).map((state) => state.id));
@@ -67,8 +65,6 @@ function getAcceptedSet(automaton: AutomataData): Set<string> {
  * - Se guarda tanto el conjunto "reachable" inmediato como el conjunto final
  *   tras expandir por ε.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 function buildDeltaStar(automaton: AutomataData, word: string): DeltaStarStep[] {
   const { nameMap } = buildTransitionMap(automaton);
@@ -139,8 +135,6 @@ function buildDeltaStar(automaton: AutomataData, word: string): DeltaStarStep[] 
  *   rutas son material explicativo.
  * - Se limita la cantidad de resultados para evitar crecimiento explosivo.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 function enumeratePaths(
   automaton: AutomataData,
@@ -301,8 +295,6 @@ function enumeratePaths(
  * - Evalúa aceptación sobre la clausura final.
  * - Enumera caminos concretos de apoyo.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function simulateAutomaton(automaton: AutomataData, word: string): AutomataSimulationResult {
   const analysis = analyzeAutomaton(automaton);

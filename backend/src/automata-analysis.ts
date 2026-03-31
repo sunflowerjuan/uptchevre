@@ -39,8 +39,6 @@ export const EPSILON_DISPLAY = "\u03b5";
  * Retorno:
  * - `string`: símbolo sin espacios laterales.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function normalizeSymbol(symbol: string): string {
   return symbol.trim();
@@ -59,8 +57,6 @@ export function normalizeSymbol(symbol: string): string {
  * Retorno:
  * - `boolean`: `true` si el símbolo equivale a ε; `false` en otro caso.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function isEpsilonSymbol(symbol: string): boolean {
   return normalizeSymbol(symbol) === EPSILON_SYMBOL;
@@ -84,8 +80,6 @@ export function isEpsilonSymbol(symbol: string): boolean {
  * - Si `automaton.alphabet` ya viene poblado, se prioriza esa fuente por ser
  *   la declaración explícita del modelo.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function getInputAlphabet(automaton: AutomataData): string[] {
   // sigma nunca incluye epsilon; las transiciones vacias se modelan aparte.
@@ -120,8 +114,6 @@ export function getInputAlphabet(automaton: AutomataData): string[] {
  * Retorno:
  * - `string`: símbolo visible, usando `ε` para la cadena vacía.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function formatSymbol(symbol: string): string {
   return isEpsilonSymbol(symbol) ? EPSILON_DISPLAY : symbol;
@@ -141,8 +133,6 @@ export function formatSymbol(symbol: string): string {
  * Retorno:
  * - `AutomataState[]`: estados marcados como iniciales.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function getInitialStates(automaton: AutomataData): AutomataState[] {
   return automaton.states.filter((state) => state.isInitial);
@@ -166,8 +156,6 @@ export function getInitialStates(automaton: AutomataData): AutomataState[] {
  * - Si una etiqueta está repetida, se usa el `id` para evitar ambigüedad.
  * - Si una etiqueta viene vacía, también se usa el `id`.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function getStateNameMap(automaton: AutomataData): Map<string, string> {
   // La teoria opera con nombres de estado. La UI aporta ids y labels.
@@ -221,8 +209,6 @@ export interface TransitionMap {
  * - Resuelve nombres visibles con `getStateNameMap`.
  * - Agrupa transiciones por clave `from::symbol`.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function buildTransitionMap(automaton: AutomataData): TransitionMap {
   const stateMap = new Map(automaton.states.map((state) => [state.id, state]));
@@ -267,8 +253,6 @@ export function buildTransitionMap(automaton: AutomataData): TransitionMap {
  * - Todo estado inicial pertenece siempre a su propia clausura.
  * - Evita ciclos infinitos gracias al conjunto `closure`.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function epsilonClosure(
   automaton: AutomataData,
@@ -315,8 +299,6 @@ export function epsilonClosure(
  * Retorno:
  * - `Set<string>`: conjunto de estados destino.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function move(
   automaton: AutomataData,
@@ -363,8 +345,6 @@ export function move(
  * - Más de una transición para la misma clave `(estado, símbolo)` implica no
  *   determinismo.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function getDeterminismIssues(automaton: AutomataData): DeterminismIssueDescriptor[] {
   // El modelo deja de ser DFA si:
@@ -423,8 +403,6 @@ export function getDeterminismIssues(automaton: AutomataData): DeterminismIssueD
  * - Si no existe ε pero hay conflictos de determinismo, se clasifica como `NFA`.
  * - En otro caso se clasifica como `DFA`.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function detectAutomatonType(automaton: AutomataData): AutomatonType {
   // Orden de decision:
@@ -468,8 +446,6 @@ export function detectAutomatonType(automaton: AutomataData): AutomatonType {
  * - Calcula clausura-ε para cada estado.
  * - Reúne toda la información en un único contrato.
  *
- * Efectos secundarios:
- * - No tiene.
  */
 export function analyzeAutomaton(automaton: AutomataData): AutomataAnalysisResult {
   /**
