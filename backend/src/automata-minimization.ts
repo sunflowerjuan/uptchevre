@@ -21,7 +21,13 @@ type OrderedState = {
   isAccept: boolean;
 };
 
-// Datos de una comparación de símbolo para el par (p, q)
+/**
+ * Resultado detallado de comparar un símbolo concreto para un par de estados.
+ *
+ * Esta estructura existe para que el frontend pueda explicar, símbolo por
+ * símbolo, por qué un par de estados termina marcado como distinguible o por
+ * qué todavía permanece sin marcar.
+ */
 export type SymbolComparison = {
   symbol: string;
   targetA: string;        // nombre δ(p, a)
@@ -32,7 +38,13 @@ export type SymbolComparison = {
   marks: boolean;         // true = este símbolo provoca que el par sea marcado
 };
 
-// Payload enriquecido serializado dentro del campo reason
+/**
+ * Payload serializable que viaja dentro del campo `reason` de la tabla de
+ * distinguibilidad.
+ *
+ * El backend lo codifica como texto para no cambiar la forma pública del
+ * contrato, pero internamente contiene un objeto rico con resumen y detalle.
+ */
 export type RichReason = {
   markType: "base" | "propagation";
   summary: string;        // texto plano
@@ -46,17 +58,48 @@ type MarkedReason = {
 
 const EMPTY_SET = "\u2205";
 
-// Prefijo para detectar reason enriquecido en el panel
+// Prefijo estable para detectar en frontend si `reason` contiene un JSON
+// enriquecido y no un texto plano heredado de una versión anterior.
 export const RICH_REASON_PREFIX = "__rich__";
 
-// ID especial para el estado trampa implícito (nunca existe en automaton.states)
+// Estado trampa implícito utilizado cuando falta una transición en el DFA de
+// entrada. No se serializa como estado real del autómata, pero sí participa en
+// el razonamiento formal de minimización.
 const IMPLICIT_TRAP_ID = "__implicit_trap__";
 const IMPLICIT_TRAP_NAME = "\u2205";
 
+/**
+ * Serializa un `RichReason` en el formato transportable esperado por el panel.
+ *
+ * Propósito:
+ * Mantener compatibilidad con el contrato existente, donde `reason` sigue
+ * siendo un string, pero ahora puede encapsular información estructurada.
+ *
+ * Parámetros:
+ * - `r: RichReason`
+ *   Motivo enriquecido ya construido por el algoritmo.
+ *
+ * Valor de retorno:
+ * - `string`
+ *   Texto con prefijo reconocible más el JSON serializado.
+ */
 function encodeRichReason(r: RichReason): string {
   return RICH_REASON_PREFIX + JSON.stringify(r);
 }
 
+/**
+ * Intenta decodificar un `reason` enriquecido recibido por el frontend o por
+ * cualquier consumidor del resultado de minimización.
+ *
+ * Parámetros:
+ * - `reason: string | undefined`
+ *   Texto serializado almacenado en una celda de la tabla.
+ *
+ * Valor de retorno:
+ * - `RichReason | null`
+ *   El objeto enriquecido si el prefijo y el JSON son válidos; `null` en caso
+ *   contrario.
+ */
 export function decodeRichReason(reason: string | undefined): RichReason | null {
   if (!reason?.startsWith(RICH_REASON_PREFIX)) return null;
   try {
@@ -66,6 +109,27 @@ export function decodeRichReason(reason: string | undefined): RichReason | null 
   }
 }
 
+/**
+ * Verifica que el autómata sea apto para el algoritmo de minimización.
+ *
+ * Propósito:
+ * Rechazar estructuras para las que el procedimiento implementado no está
+ * definido, como autómatas no deterministas o sin estado inicial.
+ *
+ * Parámetros:
+ * - `automaton: AutomataData`
+ *   Autómata candidato a minimización.
+ *
+ * Valor de retorno:
+ * - `void`
+ *   No devuelve valor; lanza errores si alguna precondición falla.
+ *
+ * Decisión técnica:
+ * A diferencia de versiones anteriores, las transiciones faltantes ya no
+ * provocan error. Se interpretan como salidas hacia un estado trampa implícito
+ * `∅`, lo que permite minimizar DFA parciales sin mutar la estructura de
+ * entrada.
+ */
 function ensureMinimizableDfa(automaton: AutomataData) {
   const analysis = analyzeAutomaton(automaton);
   if (analysis.automatonType !== "DFA") {
@@ -82,10 +146,17 @@ function ensureMinimizableDfa(automaton: AutomataData) {
     throw new Error("El automata no es determinista.");
   }
 
-  // Ya no se lanza error por transiciones faltantes:
-  // se tratan como transiciones implícitas al estado trampa ∅.
+  // No se exige completitud explícita. El algoritmo trabaja como si cada
+  // transición ausente fuera una flecha hacia un estado trampa implícito.
 }
 
+/**
+ * Genera una lista ordenada y simplificada de estados para el algoritmo.
+ *
+ * Propósito:
+ * Separar la información estrictamente necesaria para la minimización del resto
+ * de metadatos gráficos del editor.
+ */
 function buildOrderedStates(automaton: AutomataData): OrderedState[] {
   const nameMap = getStateNameMap(automaton);
   return automaton.states.map((state) => ({
@@ -96,6 +167,13 @@ function buildOrderedStates(automaton: AutomataData): OrderedState[] {
   }));
 }
 
+/**
+ * Construye una tabla δ compacta indexada por `estado::simbolo`.
+ *
+ * Propósito:
+ * Evitar búsquedas repetidas sobre el arreglo de transiciones mientras se
+ * calculan particiones, propagaciones y clases de equivalencia.
+ */
 function buildDelta(automaton: AutomataData): Map<string, string> {
   const delta = new Map<string, string>();
   for (const transition of automaton.transitions) {
@@ -112,6 +190,13 @@ function resolveTarget(delta: Map<string, string>, stateId: string, symbol: stri
   return delta.get(`${stateId}::${symbol}`) ?? IMPLICIT_TRAP_ID;
 }
 
+/**
+ * Genera una clave canónica para representar un par no ordenado de estados.
+ *
+ * Propósito:
+ * Asegurar que `(p, q)` y `(q, p)` apunten a la misma celda lógica de la tabla
+ * de distinguibilidad.
+ */
 function pairKey(a: string, b: string, orderIndex: Map<string, number>) {
   const ia = orderIndex.get(a) ?? -1;
   const ib = orderIndex.get(b) ?? -1;
@@ -122,6 +207,10 @@ function formatGroupNames(group: string[], stateNameById: Map<string, string>) {
   return group.map((stateId) => stateNameById.get(stateId) ?? stateId);
 }
 
+/**
+ * Convierte una partición interna de IDs a una estructura descriptiva lista
+ * para la interfaz.
+ */
 function toPartitionGroups(
   partition: string[][],
   stateNameById: Map<string, string>,
@@ -133,12 +222,36 @@ function toPartitionGroups(
   }));
 }
 
+/**
+ * Obtiene el índice del bloque de partición al que pertenece un estado.
+ *
+ * Regla especial:
+ * El estado trampa implícito no pertenece a ningún bloque real del DFA, por lo
+ * que se representa con `-1`. Ese valor actúa como firma estable para
+ * distinguir transiciones ausentes de transiciones que sí caen en grupos
+ * existentes.
+ */
 function getGroupIndex(partition: string[][], stateId: string): number {
   // El estado trampa implícito siempre devuelve -1 (grupo propio, no aceptor)
   if (stateId === IMPLICIT_TRAP_ID) return -1;
   return partition.findIndex((group) => group.includes(stateId));
 }
 
+/**
+ * Construye la secuencia de refinamientos de partición.
+ *
+ * Propósito:
+ * Mostrar cómo se separan los estados a medida que se detectan diferencias en
+ * sus transiciones hacia grupos ya conocidos.
+ *
+ * Flujo interno:
+ * 1. Parte de la partición actual.
+ * 2. Calcula, para cada estado, una firma basada en el grupo destino de cada
+ *    símbolo.
+ * 3. Divide el grupo original en buckets con firmas distintas.
+ * 4. Registra las causas concretas de cada separación.
+ * 5. Repite hasta que la partición se estabiliza.
+ */
 function buildPartitionIterations(
   partition: string[][],
   alphabet: string[],
@@ -166,6 +279,8 @@ function buildPartitionIterations(
         continue;
       }
 
+      // Estados con la misma firma de transiciones permanecen juntos; firmas
+      // diferentes implican que el grupo debe dividirse.
       const signatureBuckets = new Map<string, string[]>();
       for (const stateId of group) {
         const signature = alphabet
@@ -190,6 +305,8 @@ function buildPartitionIterations(
         continue;
       }
 
+      // Si aparecen múltiples buckets, el grupo dejó de ser homogéneo y se
+      // descompone en subgrupos más finos.
       next.push(...buckets);
       const referenceState = buckets[0][0];
       for (let bucketIndex = 1; bucketIndex < buckets.length; bucketIndex += 1) {
@@ -254,6 +371,19 @@ function buildPartitionIterations(
   }
 }
 
+/**
+ * Construye las iteraciones de la tabla de distinguibilidad.
+ *
+ * Propósito:
+ * Representar el algoritmo de marcado de pares distinguibles, incluyendo:
+ * - marcado base por diferencia entre aceptación y no aceptación;
+ * - propagación cuando un símbolo lleva a un par ya marcado.
+ *
+ * Decisión técnica:
+ * El estado trampa implícito no se materializa como una fila o columna real,
+ * pero sí participa cuando una transición ausente debe compararse frente a una
+ * transición existente.
+ */
 function buildDistinguishabilityIterations(
   orderedStates: OrderedState[],
   alphabet: string[],
@@ -318,6 +448,12 @@ function buildDistinguishabilityIterations(
     }
   }
 
+  /**
+   * Materializa una fotografía de la tabla en una iteración concreta.
+   *
+   * Si `finalIteration` es verdadero, todo par no marcado se interpreta ya como
+   * equivalente.
+   */
   const buildSnapshot = (iteration: number, finalIteration: boolean): DfaDistinguishabilityIteration => {
     const cells: DfaDistinguishabilityCell[] = [];
     for (let row = 1; row < orderedStates.length; row += 1) {
@@ -405,6 +541,9 @@ function buildDistinguishabilityIterations(
           }
         }
 
+        // El primer símbolo que demuestre propagación es suficiente para marcar
+        // el par, pero se conservan todas las comparaciones para la explicación
+        // visual del frontend.
         if (markingSymbol !== null) {
           const c = comparisons.find((comp) => comp.symbol === markingSymbol)!;
           newlyMarked.push({
@@ -437,6 +576,14 @@ function buildDistinguishabilityIterations(
   return iterations;
 }
 
+/**
+ * Construye las clases de equivalencia definitivas a partir de la partición
+ * final estabilizada.
+ *
+ * Propósito:
+ * Convertir la salida del refinamiento en clases nombradas (`q0''`, `q1''`,
+ * ...) y explicar por qué sus miembros pueden fusionarse.
+ */
 function buildEquivalenceClasses(
   finalPartition: string[][],
   alphabet: string[],
@@ -520,6 +667,15 @@ function buildEquivalenceClasses(
   return { equivalenceClasses, classNameByStateId };
 }
 
+/**
+ * Construye la tabla de transición del DFA minimizado usando un representante
+ * por cada clase de equivalencia.
+ *
+ * Justificación:
+ * Dentro de una misma clase, todos los estados son indistinguibles respecto al
+ * lenguaje aceptado, por lo que cualquiera de ellos puede actuar como
+ * representante sin alterar el resultado formal.
+ */
 function buildMinimizedTransitionTable(
   classes: DfaEquivalenceClass[],
   classNameByStateId: Map<string, string>,
@@ -559,6 +715,18 @@ function buildMinimizedTransitionTable(
   });
 }
 
+/**
+ * Genera un `AutomataData` listo para volver a cargarse en el editor.
+ *
+ * Propósito:
+ * Transformar la tabla minimizada en una representación gráfica simple con
+ * coordenadas automáticas y transiciones explícitas entre clases reales.
+ *
+ * Limitación:
+ * Las transiciones hacia el estado trampa implícito se omiten del autómata
+ * visual final. Se mantienen en la tabla como `∅`, pero no se dibuja un nodo
+ * extra solo para reflejar ausencias de transición.
+ */
 function buildMinimizedAutomaton(
   rows: DfaMinimizedTransitionRow[],
   alphabet: string[],
@@ -595,6 +763,23 @@ function buildMinimizedAutomaton(
   return { states, transitions, alphabet: [...alphabet] };
 }
 
+/**
+ * Ejecuta la minimización completa del DFA y compone el resultado final.
+ *
+ * Propósito:
+ * Orquestar todo el flujo: validación, partición inicial, refinamiento,
+ * distinguibilidad, clases de equivalencia, tabla minimizada y autómata
+ * reducido listo para el frontend.
+ *
+ * Parámetros:
+ * - `automaton: AutomataData`
+ *   DFA a minimizar.
+ *
+ * Valor de retorno:
+ * - `DfaMinimizationResult`
+ *   Resultado integral con formalismo original, pasos intermedios y autómata
+ *   minimizado.
+ */
 export function minimizeDfa(automaton: AutomataData): DfaMinimizationResult {
   ensureMinimizableDfa(automaton);
 

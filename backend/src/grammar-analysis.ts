@@ -25,22 +25,41 @@ import {
   normalizeSymbol,
 } from "./automata-analysis.js";
 
+/**
+ * Determina si un token textual debe interpretarse como ε.
+ *
+ * Propósito:
+ * Unificar las distintas formas con las que el usuario o el código pueden
+ * representar epsilon: cadena vacía, símbolo griego o texto `epsilon`.
+ */
 function isEpsilonToken(token: string) {
   return token === EPSILON_DISPLAY || token === EPSILON_SYMBOL || token.toLowerCase() === "epsilon";
 }
 
+/**
+ * Limpia y deduplica una lista de símbolos declarados por el usuario.
+ */
 function parseSymbolList(input: string[]) {
   return Array.from(new Set(input.map((item) => item.trim()).filter(Boolean)));
 }
 
+/**
+ * Convierte una secuencia de tokens en una etiqueta legible.
+ */
 function formatTokenList(tokens: string[]) {
   return tokens.length > 0 ? tokens.join(" ") : EPSILON_DISPLAY;
 }
 
+/**
+ * Construye un identificador estable para una producción.
+ */
 function makeProductionId(left: string, rightTokens: string[], index: number) {
   return `${left}-${rightTokens.join("_") || "epsilon"}-${index}`;
 }
 
+/**
+ * Parsea una regla ya espaciada en tokens.
+ */
 function parseProductionRule(rule: string) {
   const trimmed = rule.trim();
   if (!trimmed || isEpsilonToken(trimmed)) return [];
@@ -50,6 +69,17 @@ function parseProductionRule(rule: string) {
     .filter(Boolean);
 }
 
+/**
+ * Tokeniza una alternativa compacta sin depender obligatoriamente de espacios.
+ *
+ * Propósito:
+ * Permitir entradas como `aA` o `abB` cuando los símbolos conocidos permiten
+ * desambiguar el corte entre terminales y no terminales.
+ *
+ * Decisión técnica:
+ * Los símbolos conocidos se ordenan por longitud descendente para priorizar el
+ * match más largo posible y reducir ambigüedades.
+ */
 function tokenizeCompactRule(rule: string, knownSymbols: string[]) {
   const trimmed = rule.trim();
   if (!trimmed || isEpsilonToken(trimmed)) return [];
@@ -84,6 +114,9 @@ function tokenizeCompactRule(rule: string, knownSymbols: string[]) {
   return tokens;
 }
 
+/**
+ * Divide una regla compuesta por `|` en alternativas independientes.
+ */
 function parseProductionAlternatives(rule: string, knownSymbols: string[]) {
   return rule.split("|").map((alternative) => {
     const trimmed = alternative.trim();
@@ -99,6 +132,9 @@ function hasOnlyKnownSymbols(tokens: string[], terminals: Set<string>, nonTermin
   return tokens.every((token) => terminals.has(token) || nonTerminals.has(token));
 }
 
+/**
+ * Compara dos arreglos token a token.
+ */
 function arraysEqual(a: string[], b: string[]) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
@@ -112,6 +148,15 @@ function isSuffix(suffix: string[], full: string[]) {
   return suffix.every((value, index) => full[full.length - suffix.length + index] === value);
 }
 
+/**
+ * Parte la palabra de entrada según la granularidad de los terminales.
+ *
+ * Regla:
+ * - si todos los terminales son de un carácter, se divide carácter por
+ *   carácter;
+ * - si existen terminales compuestos, la palabra se mantiene como una unidad
+ *   salvo que el usuario la haya separado con espacios.
+ */
 function splitWord(word: string, terminals: string[]) {
   const trimmed = word.trim();
   if (!trimmed) return [];
@@ -149,12 +194,23 @@ function isTerminalForm(form: string[], nonTerminalSet: Set<string>) {
   return form.every((token) => !nonTerminalSet.has(token));
 }
 
+/**
+ * Reemplaza el primer no terminal de una forma sentencial.
+ *
+ * Propósito:
+ * Modelar el paso derivativo usado por el analizador de gramáticas. La función
+ * asume una estrategia por el primer no terminal visible, suficiente para las
+ * derivaciones particulares que produce el sistema.
+ */
 function replaceFirstNonTerminal(form: string[], nonTerminalSet: Set<string>, replacement: string[]) {
   const index = form.findIndex((token) => nonTerminalSet.has(token));
   if (index < 0) return form;
   return [...form.slice(0, index), ...replacement, ...form.slice(index + 1)];
 }
 
+/**
+ * Construye una representación textual simple del árbol de derivación.
+ */
 function buildTreeLines(steps: GrammarDerivationStep[]) {
   if (steps.length === 0) {
     return ["No se encontro una derivacion aceptante."];
@@ -187,6 +243,9 @@ function buildTreeLines(steps: GrammarDerivationStep[]) {
   return lines;
 }
 
+/**
+ * Centra un valor en un ancho fijo para diagramas monoespaciados.
+ */
 function padCenter(value: string, width: number) {
   if (value.length >= width) return value;
   const total = width - value.length;
@@ -195,6 +254,10 @@ function padCenter(value: string, width: number) {
   return `${" ".repeat(left)}${value}${" ".repeat(right)}`;
 }
 
+/**
+ * Genera un diagrama lineal de la derivación, útil como "hilo" de cambios de
+ * estado entre formas sentenciales.
+ */
 function buildThreadDiagramLines(steps: GrammarDerivationStep[]) {
   if (steps.length <= 1) {
     return ["No hay cambios de estado para diagramar."];
@@ -236,6 +299,25 @@ function buildThreadDiagramLines(steps: GrammarDerivationStep[]) {
   return [stateLine, labelLine, symbolLine];
 }
 
+/**
+ * Valida si una gramática cumple las condiciones esperadas de una gramática
+ * regular.
+ *
+ * Propósito:
+ * Revisar consistencia de conjuntos, símbolo inicial, estructura lineal de las
+ * producciones y posibles restricciones académicas del modo estricto.
+ *
+ * Parámetros:
+ * - `definition`
+ *   Definición parcial o completa de la gramática.
+ * - `strictRules = true`
+ *   Si es verdadero, exige mínimos estructurales y validez más rígida.
+ *
+ * Valor de retorno:
+ * - `GrammarValidationResult`
+ *   Contiene la gramática normalizada si fue válida y la lista de incidencias
+ *   detectadas.
+ */
 function validateRegularGrammar(
   definition: Omit<GrammarDefinition, "source" | "linearity"> & { source?: GrammarSource },
   strictRules = true,
@@ -246,6 +328,7 @@ function validateRegularGrammar(
   const startSymbol = definition.startSymbol.trim();
   const productions = definition.productions;
 
+  // Validaciones mínimas de tamaño y consistencia general del enunciado.
   if (strictRules) {
     if (terminals.length < 2) {
       issues.push({ message: "La gramatica debe tener al menos 2 simbolos terminales." });
@@ -275,6 +358,8 @@ function validateRegularGrammar(
   const nonTerminalSet = new Set(nonTerminals);
   const seenLinearities = new Set<GrammarLinearity>();
 
+  // Primera pasada: detectar problemas estructurales y averiguar si la
+  // gramática es lineal derecha o lineal izquierda.
   for (const production of productions) {
     if (strictRules && !nonTerminalSet.has(production.left)) {
       issues.push({
@@ -328,6 +413,8 @@ function validateRegularGrammar(
 
   const linearity = seenLinearities.has("LEFT") ? "LEFT" : "RIGHT";
 
+  // Segunda pasada: una vez determinada la linealidad global, se verifican las
+  // reglas de posición exacta del no terminal.
   for (const production of productions) {
     const nonTerminalPositions = production.rightTokens
       .map((token, index) => (nonTerminalSet.has(token) ? index : -1))
@@ -375,6 +462,18 @@ function validateRegularGrammar(
   };
 }
 
+/**
+ * Intenta derivar una palabra a partir de una gramática regular.
+ *
+ * Propósito:
+ * Buscar una derivación particular aceptante y producir material explicativo:
+ * forma sentencial, árbol y diagrama de hilo.
+ *
+ * Estrategia:
+ * Se usa una exploración acotada en anchura sobre formas sentenciales. El
+ * algoritmo poda ramas incompatibles con la palabra objetivo usando prefijos o
+ * sufijos terminales, según la linealidad de la gramática.
+ */
 function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, includeThreadDiagram: boolean): GrammarWordAnalysis {
   const word = splitWord(wordInput, grammar.terminals);
   const nonTerminalSet = new Set(grammar.nonTerminals);
@@ -430,6 +529,10 @@ function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, i
       break;
     }
 
+    // Poda de búsqueda:
+    // - limita profundidad;
+    // - descarta ramas cuyo prefijo o sufijo terminal ya contradice la palabra;
+    // - evita seguir expandiendo formas terminales no aceptantes.
     if (current.depth >= maxDepth) continue;
     if (isRightLinear && !isPrefix(terminalPrefix, word)) continue;
     if (!isRightLinear && !isSuffix(terminalPrefix, word)) continue;
@@ -450,6 +553,8 @@ function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, i
       if (isRightLinear && !isPrefix(nextPrefix, word)) continue;
       if (!isRightLinear && !isSuffix(nextPrefix, word)) continue;
 
+      // La combinación profundidad + forma sentencial evita ciclos triviales sin
+      // impedir explorar la misma forma en niveles conceptualmente distintos.
       const stateKey = `${current.depth + 1}:${nextForm.join(" ")}`;
       if (visited.has(stateKey)) continue;
       visited.add(stateKey);
@@ -494,6 +599,10 @@ function analyzeWordWithGrammar(grammar: GrammarDefinition, wordInput: string, i
   };
 }
 
+/**
+ * Genera letras consecutivas evitando la `S`, reservada para el símbolo
+ * inicial de la gramática derivada.
+ */
 function getIndexedLetter(index: number) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter((letter) => letter !== "S");
   const base = alphabet[index % alphabet.length] ?? "A";
@@ -501,6 +610,18 @@ function getIndexedLetter(index: number) {
   return cycle === 0 ? base : `${base}${cycle}`;
 }
 
+/**
+ * Construye las producciones regulares equivalentes a un autómata.
+ *
+ * Propósito:
+ * Traducir estados y transiciones del autómata a reglas de una gramática
+ * regular, incluyendo el caso especial de autómatas con epsilon.
+ *
+ * Decisiones técnicas:
+ * - Para `NFA_EPSILON`, primero se considera la clausura-ε del estado origen.
+ * - Un estado de aceptación genera una producción hacia ε.
+ * - Cada producción incluye una nota explicativa útil para la interfaz.
+ */
 function buildAutomatonProductions(
   automaton: AutomataData,
   type: AutomatonType,
@@ -513,6 +634,8 @@ function buildAutomatonProductions(
     const alphabet = getInputAlphabet(automaton);
 
     mapping.forEach((item, stateIndex) => {
+      // En presencia de epsilon, las producciones visibles no salen del estado
+      // aislado, sino de su clausura-ε completa.
       const sourceClosure = epsilonClosure(automaton, [item.stateId]);
       const sourceClosureNames = Array.from(sourceClosure)
         .map((stateId) => mappingById.get(stateId)?.stateName ?? stateId)
@@ -537,6 +660,8 @@ function buildAutomatonProductions(
         });
       });
 
+      // Si la clausura contiene un estado de aceptación, la variable puede
+      // derivar ε aunque el estado original no sea aceptor por sí solo.
       if (Array.from(sourceClosure).some((stateId) => mappingById.get(stateId)?.isAccept)) {
         productions.push({
           id: makeProductionId(item.nonTerminal, [], 9000 + stateIndex),
@@ -583,6 +708,13 @@ function buildAutomatonProductions(
   return productions;
 }
 
+/**
+ * Deriva el mapeo entre estados del autómata y no terminales de la gramática.
+ *
+ * Regla principal:
+ * El estado inicial intenta usar siempre `S`. Los demás estados se nombran con
+ * letras consecutivas para mantener una gramática legible.
+ */
 function deriveStateMapping(automaton: AutomataData) {
   const nameMap = getStateNameMap(automaton);
   const startStateId = automaton.states.find((state) => state.isInitial)?.id ?? automaton.states[0]?.id;
@@ -597,6 +729,17 @@ function deriveStateMapping(automaton: AutomataData) {
   }));
 }
 
+/**
+ * Deriva la gramática regular equivalente a un autómata.
+ *
+ * Parámetros:
+ * - `automaton: AutomataData`
+ *   Autómata del cual se obtendrá la gramática.
+ *
+ * Valor de retorno:
+ * - `GrammarDefinition`
+ *   Gramática regular normalizada y enriquecida con metadatos de origen.
+ */
 export function deriveGrammarFromAutomaton(automaton: AutomataData): GrammarDefinition {
   const type = detectAutomatonType(automaton);
   const mapping = deriveStateMapping(automaton);
@@ -615,6 +758,10 @@ export function deriveGrammarFromAutomaton(automaton: AutomataData): GrammarDefi
   };
 }
 
+/**
+ * Devuelve las reglas conceptuales que explican la transformación de autómata
+ * a gramática según el tipo del autómata.
+ */
 function getTransformationRules(type: AutomatonType): GrammarTransformationRule[] {
   const common: GrammarTransformationRule[] = [
     {
@@ -672,6 +819,16 @@ function getTransformationRules(type: AutomatonType): GrammarTransformationRule[
   ];
 }
 
+/**
+ * Valida una gramática ingresada manualmente y analiza una palabra sobre ella.
+ *
+ * Parámetros:
+ * - `input`
+ *   Estructura con conjuntos declarados, producciones, palabra y modo estricto.
+ *
+ * Valor de retorno:
+ * - `GrammarManualAnalysisResult`
+ */
 export function analyzeManualGrammar(input: {
   terminals: string[];
   nonTerminals: string[];
@@ -683,6 +840,8 @@ export function analyzeManualGrammar(input: {
   const terminals = parseSymbolList(input.terminals);
   const nonTerminals = parseSymbolList(input.nonTerminals);
   const knownSymbols = [...nonTerminals, ...terminals];
+  // Cada regla textual puede expandirse en varias producciones por el uso de
+  // alternativas separadas con `|`.
   const productions = input.productions
     .flatMap((production, index) =>
       parseProductionAlternatives(production.rule, knownSymbols).map((tokens, alternativeIndex) => ({
@@ -708,6 +867,14 @@ export function analyzeManualGrammar(input: {
   };
 }
 
+/**
+ * Deriva la gramática equivalente a un autómata y analiza una palabra sobre
+ * esa gramática resultante.
+ *
+ * Valor agregado:
+ * Además del análisis, devuelve una lista de reglas explicativas que ayudan a
+ * entender cómo se realizó la transformación.
+ */
 export function analyzeAutomatonEquivalentGrammar(input: {
   automaton: AutomataData;
   word: string;
