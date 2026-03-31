@@ -49,6 +49,10 @@ const EMPTY_SET = "\u2205";
 // Prefijo para detectar reason enriquecido en el panel
 export const RICH_REASON_PREFIX = "__rich__";
 
+// ID especial para el estado trampa implícito (nunca existe en automaton.states)
+const IMPLICIT_TRAP_ID = "__implicit_trap__";
+const IMPLICIT_TRAP_NAME = "\u2205";
+
 function encodeRichReason(r: RichReason): string {
   return RICH_REASON_PREFIX + JSON.stringify(r);
 }
@@ -78,25 +82,8 @@ function ensureMinimizableDfa(automaton: AutomataData) {
     throw new Error("El automata no es determinista.");
   }
 
-  const alphabet = getInputAlphabet(automaton);
-  const missingTransitions: string[] = [];
-  for (const state of automaton.states) {
-    for (const symbol of alphabet) {
-      const exists = automaton.transitions.some(
-        (transition) =>
-          transition.from === state.id && normalizeSymbol(transition.symbol) === symbol,
-      );
-      if (!exists) {
-        missingTransitions.push(`${state.label || state.id} con ${symbol}`);
-      }
-    }
-  }
-
-  if (missingTransitions.length > 0) {
-    throw new Error(
-      `El DFA debe estar completo. Faltan transiciones para: ${missingTransitions.join(", ")}.`,
-    );
-  }
+  // Ya no se lanza error por transiciones faltantes:
+  // se tratan como transiciones implícitas al estado trampa ∅.
 }
 
 function buildOrderedStates(automaton: AutomataData): OrderedState[] {
@@ -117,8 +104,18 @@ function buildDelta(automaton: AutomataData): Map<string, string> {
   return delta;
 }
 
+/**
+ * Resuelve δ(stateId, symbol). Si no existe transición, devuelve IMPLICIT_TRAP_ID,
+ * que representa el estado trampa ∅ implícito (no aceptor, sin estado real).
+ */
+function resolveTarget(delta: Map<string, string>, stateId: string, symbol: string): string {
+  return delta.get(`${stateId}::${symbol}`) ?? IMPLICIT_TRAP_ID;
+}
+
 function pairKey(a: string, b: string, orderIndex: Map<string, number>) {
-  return (orderIndex.get(a) ?? 0) > (orderIndex.get(b) ?? 0) ? `${a}::${b}` : `${b}::${a}`;
+  const ia = orderIndex.get(a) ?? -1;
+  const ib = orderIndex.get(b) ?? -1;
+  return ia > ib ? `${a}::${b}` : `${b}::${a}`;
 }
 
 function formatGroupNames(group: string[], stateNameById: Map<string, string>) {
@@ -136,7 +133,9 @@ function toPartitionGroups(
   }));
 }
 
-function getGroupIndex(partition: string[][], stateId: string) {
+function getGroupIndex(partition: string[][], stateId: string): number {
+  // El estado trampa implícito siempre devuelve -1 (grupo propio, no aceptor)
+  if (stateId === IMPLICIT_TRAP_ID) return -1;
   return partition.findIndex((group) => group.includes(stateId));
 }
 
@@ -171,8 +170,10 @@ function buildPartitionIterations(
       for (const stateId of group) {
         const signature = alphabet
           .map((symbol) => {
-            const target = delta.get(`${stateId}::${symbol}`);
-            return target ? getGroupIndex(current, target) : -1;
+            // resolveTarget devuelve IMPLICIT_TRAP_ID si no hay transición,
+            // y getGroupIndex lo mapea a -1 (grupo trampa implícito).
+            const target = resolveTarget(delta, stateId, symbol);
+            return getGroupIndex(current, target);
           })
           .join("|");
         const bucket = signatureBuckets.get(signature) ?? [];
@@ -194,17 +195,26 @@ function buildPartitionIterations(
       for (let bucketIndex = 1; bucketIndex < buckets.length; bucketIndex += 1) {
         const comparedState = buckets[bucketIndex][0];
         const separatingSymbol = alphabet.find((symbol) => {
-          const referenceTarget = delta.get(`${referenceState}::${symbol}`) ?? "";
-          const comparedTarget = delta.get(`${comparedState}::${symbol}`) ?? "";
-          return (
-            getGroupIndex(current, referenceTarget) !== getGroupIndex(current, comparedTarget)
-          );
+          const referenceTarget = resolveTarget(delta, referenceState, symbol);
+          const comparedTarget = resolveTarget(delta, comparedState, symbol);
+          return getGroupIndex(current, referenceTarget) !== getGroupIndex(current, comparedTarget);
         });
 
         if (!separatingSymbol) continue;
 
-        const referenceTarget = delta.get(`${referenceState}::${separatingSymbol}`) ?? "";
-        const comparedTarget = delta.get(`${comparedState}::${separatingSymbol}`) ?? "";
+        const referenceTarget = resolveTarget(delta, referenceState, separatingSymbol);
+        const comparedTarget = resolveTarget(delta, comparedState, separatingSymbol);
+
+        // Para la causa de split, mostramos ∅ si el destino es el trampa implícito
+        const referenceTargetName =
+          referenceTarget === IMPLICIT_TRAP_ID
+            ? IMPLICIT_TRAP_NAME
+            : (stateNameById.get(referenceTarget) ?? referenceTarget);
+        const comparedTargetName =
+          comparedTarget === IMPLICIT_TRAP_ID
+            ? IMPLICIT_TRAP_NAME
+            : (stateNameById.get(comparedTarget) ?? comparedTarget);
+
         splitCauses.push({
           groupId: `P${groupIndex + 1}`,
           stateAId: referenceState,
@@ -212,10 +222,10 @@ function buildPartitionIterations(
           stateBId: comparedState,
           stateBName: stateNameById.get(comparedState) ?? comparedState,
           symbol: separatingSymbol,
-          targetAStateId: referenceTarget,
-          targetAStateName: stateNameById.get(referenceTarget) ?? referenceTarget,
-          targetBStateId: comparedTarget,
-          targetBStateName: stateNameById.get(comparedTarget) ?? comparedTarget,
+          targetAStateId: referenceTarget === IMPLICIT_TRAP_ID ? "" : referenceTarget,
+          targetAStateName: referenceTargetName,
+          targetBStateId: comparedTarget === IMPLICIT_TRAP_ID ? "" : comparedTarget,
+          targetBStateName: comparedTargetName,
           targetAGroupId: `P${getGroupIndex(current, referenceTarget) + 1}`,
           targetBGroupId: `P${getGroupIndex(current, comparedTarget) + 1}`,
         });
@@ -251,11 +261,30 @@ function buildDistinguishabilityIterations(
   acceptSet: Set<string>,
   stateNameById: Map<string, string>,
 ): DfaDistinguishabilityIteration[] {
+  // El trampa implícito tiene un order index más alto que todos los estados reales
   const orderIndex = new Map(orderedStates.map((state, index) => [state.id, index]));
+  orderIndex.set(IMPLICIT_TRAP_ID, orderedStates.length); // siempre el último
+
   const markedRich = new Map<string, MarkedReason>();
   const iterations: DfaDistinguishabilityIteration[] = [];
 
-  // Marcado base: p ∈ F y q ∉ F (o viceversa)
+  /**
+   * Determina si un target ID está en el conjunto de aceptación.
+   * El trampa implícito nunca es aceptor.
+   */
+  function isAccept(targetId: string): boolean {
+    return targetId !== IMPLICIT_TRAP_ID && acceptSet.has(targetId);
+  }
+
+  /**
+   * Nombre legible de un target (∅ si es el trampa implícito).
+   */
+  function targetName(targetId: string): string {
+    if (targetId === IMPLICIT_TRAP_ID) return IMPLICIT_TRAP_NAME;
+    return stateNameById.get(targetId) ?? targetId;
+  }
+
+  // ─── Marcado base: p ∈ F y q ∉ F (o viceversa) ──────────────────────────────
   for (let row = 1; row < orderedStates.length; row += 1) {
     for (let column = 0; column < row; column += 1) {
       const stateA = orderedStates[row];
@@ -263,14 +292,14 @@ function buildDistinguishabilityIterations(
       if (acceptSet.has(stateA.id) !== acceptSet.has(stateB.id)) {
         const aInF = acceptSet.has(stateA.id);
         const comparisons: SymbolComparison[] = alphabet.map((symbol) => {
-          const targetAId = delta.get(`${stateA.id}::${symbol}`) ?? "";
-          const targetBId = delta.get(`${stateB.id}::${symbol}`) ?? "";
+          const targetAId = resolveTarget(delta, stateA.id, symbol);
+          const targetBId = resolveTarget(delta, stateB.id, symbol);
           return {
             symbol,
-            targetA: stateNameById.get(targetAId) ?? targetAId,
-            targetB: stateNameById.get(targetBId) ?? targetBId,
-            targetAInF: acceptSet.has(targetAId),
-            targetBInF: acceptSet.has(targetBId),
+            targetA: targetName(targetAId),
+            targetB: targetName(targetBId),
+            targetAInF: isAccept(targetAId),
+            targetBInF: isAccept(targetBId),
             pairAlreadyMarked: false,
             marks: false,
           };
@@ -318,6 +347,7 @@ function buildDistinguishabilityIterations(
 
   iterations.push(buildSnapshot(0, false));
 
+  // ─── Propagación ─────────────────────────────────────────────────────────────
   let iteration = 1;
   while (true) {
     const newlyMarked: Array<{ key: string; info: MarkedReason }> = [];
@@ -329,25 +359,43 @@ function buildDistinguishabilityIterations(
         const currentKey = pairKey(stateA.id, stateB.id, orderIndex);
         if (markedRich.has(currentKey)) continue;
 
-        // Calcular comparaciones para TODOS los símbolos
         const comparisons: SymbolComparison[] = [];
         let markingSymbol: string | null = null;
 
         for (const symbol of alphabet) {
-          const targetAId = delta.get(`${stateA.id}::${symbol}`) ?? "";
-          const targetBId = delta.get(`${stateB.id}::${symbol}`) ?? "";
+          const targetAId = resolveTarget(delta, stateA.id, symbol);
+          const targetBId = resolveTarget(delta, stateB.id, symbol);
           const sameTarget = targetAId === targetBId;
-          const targetPairAlreadyMarked = !sameTarget
-            ? markedRich.has(pairKey(targetAId, targetBId, orderIndex))
-            : false;
+
+          // Dos destinos distintos: puede haber propagación.
+          // Si uno es el trampa y el otro no, el par destino es (real, ∅).
+          // Necesitamos ver si ese par está marcado.
+          // El trampa implícito NO está en orderedStates, por lo que no tiene
+          // una clave en markedRich por sí solo. Sin embargo, cualquier par
+          // (estado_real, ∅) donde estado_real sea aceptor ya fue marcado en
+          // la iteración base (porque ∅ no es aceptor).
+          // Si estado_real no es aceptor, ese par no está marcado (equivalentes).
+          let targetPairAlreadyMarked = false;
+          if (!sameTarget) {
+            const oneTrap = targetAId === IMPLICIT_TRAP_ID || targetBId === IMPLICIT_TRAP_ID;
+            if (oneTrap) {
+              // Par (real, ∅): marcado iff el estado real es aceptor
+              const realId = targetAId === IMPLICIT_TRAP_ID ? targetBId : targetAId;
+              targetPairAlreadyMarked = acceptSet.has(realId);
+            } else {
+              // Ambos son estados reales: consultamos la tabla normal
+              targetPairAlreadyMarked = markedRich.has(pairKey(targetAId, targetBId, orderIndex));
+            }
+          }
+
           const marks = !sameTarget && targetPairAlreadyMarked;
 
           comparisons.push({
             symbol,
-            targetA: stateNameById.get(targetAId) ?? targetAId,
-            targetB: stateNameById.get(targetBId) ?? targetBId,
-            targetAInF: acceptSet.has(targetAId),
-            targetBInF: acceptSet.has(targetBId),
+            targetA: targetName(targetAId),
+            targetB: targetName(targetBId),
+            targetAInF: isAccept(targetAId),
+            targetBInF: isAccept(targetBId),
             pairAlreadyMarked: targetPairAlreadyMarked,
             marks,
           });
@@ -419,18 +467,21 @@ function buildEquivalenceClasses(
       classNameByStateId.set(stateId, `q${index}''`);
     }
   });
+  // El trampa implícito mapea a ∅ en la tabla minimizada
+  classNameByStateId.set(IMPLICIT_TRAP_ID, EMPTY_SET);
 
   const equivalenceClasses: DfaEquivalenceClass[] = classes.map((group, index) => {
     const className = `q${index}''`;
     const symbolChecks: DfaEquivalenceSymbolCheck[] = alphabet.map((symbol) => ({
       symbol,
       mappings: group.map((stateId) => {
-        const targetStateId = delta.get(`${stateId}::${symbol}`) ?? "";
+        const targetStateId = resolveTarget(delta, stateId, symbol);
+        const isTrap = targetStateId === IMPLICIT_TRAP_ID;
         return {
           stateId,
           stateName: stateNameById.get(stateId) ?? stateId,
-          targetStateId,
-          targetStateName: stateNameById.get(targetStateId) ?? targetStateId,
+          targetStateId: isTrap ? "" : targetStateId,
+          targetStateName: isTrap ? IMPLICIT_TRAP_NAME : (stateNameById.get(targetStateId) ?? targetStateId),
           targetClassName: classNameByStateId.get(targetStateId) ?? EMPTY_SET,
         };
       }),
@@ -493,12 +544,15 @@ function buildMinimizedTransitionTable(
         : false,
       isAccept: equivalenceClass.stateIds.some((id) => acceptStateIds.has(id)),
       transitions: alphabet.map((symbol) => {
-        const targetStateId = delta.get(`${representative}::${symbol}`) ?? "";
+        const targetStateId = resolveTarget(delta, representative, symbol);
         return {
           symbol,
           targetClassName: classNameByStateId.get(targetStateId) ?? EMPTY_SET,
-          targetStateId,
-          targetStateName: stateNameById.get(targetStateId) ?? targetStateId,
+          targetStateId: targetStateId === IMPLICIT_TRAP_ID ? "" : targetStateId,
+          targetStateName:
+            targetStateId === IMPLICIT_TRAP_ID
+              ? IMPLICIT_TRAP_NAME
+              : (stateNameById.get(targetStateId) ?? targetStateId),
         };
       }),
     };
@@ -527,12 +581,15 @@ function buildMinimizedAutomaton(
     rows.map((row, index) => [row.className, states[index].id]),
   );
   const transitions = rows.flatMap((row) =>
-    row.transitions.map((transition, index) => ({
-      id: `min-${row.className}-${transition.symbol}-${index}`,
-      from: stateIdByClassName.get(row.className) ?? "",
-      to: stateIdByClassName.get(transition.targetClassName) ?? "",
-      symbol: transition.symbol,
-    })),
+    row.transitions
+      // Omitir transiciones que van al trampa implícito (∅) en el DFA minimizado
+      .filter((transition) => transition.targetClassName !== EMPTY_SET)
+      .map((transition, index) => ({
+        id: `min-${row.className}-${transition.symbol}-${index}`,
+        from: stateIdByClassName.get(row.className) ?? "",
+        to: stateIdByClassName.get(transition.targetClassName) ?? "",
+        symbol: transition.symbol,
+      })),
   );
 
   return { states, transitions, alphabet: [...alphabet] };
