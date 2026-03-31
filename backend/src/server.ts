@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { analyzeAutomaton } from "./automata-analysis.js";
 import { areAutomataEquivalent } from "./automata-equivalence.js";
+import { minimizeDfa } from "./automata-minimization.js";
 import { simulateAutomaton } from "./automata-simulation.js";
 import { transformNfaToDfa } from "./automata-transformation.js";
 import { analyzeAutomatonEquivalentGrammar, analyzeManualGrammar } from "./grammar-analysis.js";
@@ -80,6 +81,27 @@ app.post("/api/automata/equivalent", (req, res) => {
 
   const result = areAutomataEquivalent(body.automatonA, body.automatonB);
   res.json({ ok: true, result });
+});
+
+app.post("/api/automata/minimize", (req, res) => {
+  const body = req.body as { automaton?: AutomataData };
+  if (!body?.automaton) {
+    res.status(400).json({
+      ok: false,
+      error: "Debes enviar un automata en el body.",
+    });
+    return;
+  }
+
+  try {
+    const result = minimizeDfa(body.automaton);
+    res.json({ ok: true, result });
+  } catch (error) {
+    res.status(400).json({
+      ok: false,
+      error: error instanceof Error ? error.message : "No fue posible minimizar el DFA.",
+    });
+  }
 });
 
 app.post("/api/grammar/manual", (req, res) => {
